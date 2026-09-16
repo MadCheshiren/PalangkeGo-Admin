@@ -591,7 +591,6 @@ class AnnouncementExportData {
       ReportColumn(label: 'Audience', flex: 1.1),
       ReportColumn(label: 'Channel', flex: 1.2),
       ReportColumn(label: 'Reach', flex: 0.9, isNumeric: true),
-      ReportColumn(label: 'Author', flex: 1.1),
       ReportColumn(label: 'Status', flex: 1.0),
     ];
 
@@ -616,7 +615,6 @@ class AnnouncementExportData {
           a.audience,
           a.notificationType,
           a.recipientCount,
-          a.createdBy,
           statusStr,
         ],
       );

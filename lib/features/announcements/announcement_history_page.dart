@@ -105,8 +105,25 @@ class _AnnouncementHistoryPageState
               context,
               (_) => const AnnouncementDialog(),
             ),
-            icon: const Icon(Icons.add_rounded, size: 16),
-            label: const Text('New Announcement'),
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: const Text(
+              'New Announcement',
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.2,
+              ),
+            ),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: const Color(0xFF0F4A3C),
+              elevation: 3,
+              shadowColor: Colors.black.withValues(alpha: 0.25),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
           ),
           metrics: [
             MetricCardData(
@@ -221,7 +238,6 @@ class _AnnouncementHistoryPageState
                     DataColumn(label: Text('AUDIENCE')),
                     DataColumn(label: Text('CHANNEL')),
                     DataColumn(label: Text('REACH')),
-                    DataColumn(label: Text('AUTHOR')),
                     DataColumn(label: Text('STATUS')),
                     DataColumn(label: Text('ACTIONS')),
                   ],
@@ -272,15 +288,15 @@ class _AnnouncementHistoryPageState
                                       ),
                                     ),
                                     const SizedBox(height: 3),
-                                     FormattedText(
-                                       item.summary,
-                                       maxLines: 1,
-                                       overflow: TextOverflow.ellipsis,
-                                       style: TextStyle(
-                                         fontSize: 11,
-                                         color: colors.mutedText,
-                                       ),
-                                     ),
+                                    FormattedText(
+                                      item.summary,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: colors.mutedText,
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -341,13 +357,6 @@ class _AnnouncementHistoryPageState
                                         ),
                                       ],
                                     ),
-                            ),
-                            // Author
-                            DataCell(
-                              Text(
-                                item.createdBy.isEmpty ? 'ADM-001' : item.createdBy,
-                                style: const TextStyle(fontSize: 11.5),
-                              ),
                             ),
                             // Status
                             DataCell(
