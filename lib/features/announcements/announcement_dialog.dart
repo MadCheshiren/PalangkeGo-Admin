@@ -72,10 +72,33 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
   bool loading = false;
   Uint8List? image;
   Uint8List? originalImageBytes;
+  String? imageUrl;
   String? imageName;
   int? imageSizeBytes;
   int? imageWidth;
   int? imageHeight;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.announcementToEdit != null) {
+      final item = widget.announcementToEdit!;
+      image = item.imageBytes;
+      originalImageBytes = item.imageBytes;
+      imageUrl = item.imageUrl;
+      if (image != null) {
+        imageSizeBytes = image!.lengthInBytes;
+        ui.instantiateImageCodec(image!).then((codec) => codec.getNextFrame()).then((frame) {
+          if (mounted) {
+            setState(() {
+              imageWidth = frame.image.width;
+              imageHeight = frame.image.height;
+            });
+          }
+        }).catchError((_) {});
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -308,7 +331,8 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
   }
 
   void _showRealSizeDialog(BuildContext context) {
-    if (image == null) return;
+    final hasImg = image != null || (imageUrl != null && imageUrl!.isNotEmpty);
+    if (!hasImg) return;
     showDialog<void>(
       context: context,
       builder: (dialogCtx) => Dialog(
@@ -359,7 +383,7 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'Dimensions: ${imageWidth ?? 0} × ${imageHeight ?? 0} px • File Size: ${_formatBytes(imageSizeBytes ?? image!.lengthInBytes)}${imageWidth != null && imageHeight != null ? ' • Aspect: ${_aspectRatioString(imageWidth!, imageHeight!)}' : ''}',
+                              'Dimensions: ${imageWidth ?? 0} × ${imageHeight ?? 0} px • File Size: ${_formatBytes(imageSizeBytes ?? (image?.lengthInBytes ?? 0))}${imageWidth != null && imageHeight != null ? ' • Aspect: ${_aspectRatioString(imageWidth!, imageHeight!)}' : ''}',
                               style: TextStyle(
                                 color: Colors.white.withValues(alpha: 0.75),
                                 fontSize: 11,
@@ -387,10 +411,19 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                       child: InteractiveViewer(
                         minScale: 0.5,
                         maxScale: 5.0,
-                        child: Image.memory(
-                          image!,
-                          fit: BoxFit.contain,
-                        ),
+                        child: image != null
+                            ? Image.memory(
+                                image!,
+                                fit: BoxFit.contain,
+                              )
+                            : Image.asset(
+                                imageUrl!,
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, __, ___) => Image.network(
+                                  imageUrl!,
+                                  fit: BoxFit.contain,
+                                ),
+                              ),
                       ),
                     ),
                   ),
@@ -470,6 +503,9 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
         state: draft
             ? 'Draft'
             : (existing.state == 'Draft' ? 'Sent' : existing.state),
+        imageBytes: image,
+        imageUrl: imageUrl,
+        clearImage: image == null && (imageUrl == null || imageUrl!.isEmpty),
       );
       await ref.read(appDataProvider.notifier).updateAnnouncement(updated);
       if (!mounted) return;
@@ -493,6 +529,8 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
             createdBy: profile.name,
             recipientCount: recipients,
             deliveredCount: draft ? 0 : (notify ? recipients : 0),
+            imageBytes: image,
+            imageUrl: imageUrl,
           ),
         );
     if (!mounted) return;
@@ -610,9 +648,9 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                     'Feature Image (Optional)',
                     style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
                   ),
-                  if (image != null && imageWidth != null && imageHeight != null)
+                  if ((image != null || imageUrl != null) && imageWidth != null && imageHeight != null)
                     Text(
-                      'Real Size: $imageWidth × $imageHeight px • ${_formatBytes(imageSizeBytes ?? image!.lengthInBytes)}',
+                      'Real Size: $imageWidth × $imageHeight px • ${_formatBytes(imageSizeBytes ?? (image?.lengthInBytes ?? 0))}',
                       style: TextStyle(
                         fontSize: 10.5,
                         fontWeight: FontWeight.w600,
@@ -622,7 +660,7 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                 ],
               ),
               const SizedBox(height: 7),
-              image == null
+              (image == null && (imageUrl == null || imageUrl!.isEmpty))
                   ? InkWell(
                       onTap: pick,
                       borderRadius: BorderRadius.circular(9),
@@ -694,10 +732,19 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                               message: 'Click to view real size in full preview',
                               child: InkWell(
                                 onTap: () => _showRealSizeDialog(context),
-                                child: Image.memory(
-                                  image!,
-                                  fit: BoxFit.cover,
-                                ),
+                                child: image != null
+                                    ? Image.memory(
+                                        image!,
+                                        fit: BoxFit.cover,
+                                      )
+                                    : Image.asset(
+                                        imageUrl!,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, __, ___) => Image.network(
+                                          imageUrl!,
+                                          fit: BoxFit.cover,
+                                        ),
+                                      ),
                               ),
                             ),
                           Positioned(
@@ -722,7 +769,7 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                                   ),
                                   const SizedBox(width: 5),
                                   Text(
-                                    'Real Size: ${imageWidth ?? 0} × ${imageHeight ?? 0} px • ${_formatBytes(imageSizeBytes ?? image!.lengthInBytes)}${imageWidth != null && imageHeight != null ? ' (${_aspectRatioString(imageWidth!, imageHeight!)})' : ''}',
+                                    'Real Size: ${imageWidth ?? 0} × ${imageHeight ?? 0} px • ${_formatBytes(imageSizeBytes ?? (image?.lengthInBytes ?? 0))}${imageWidth != null && imageHeight != null ? ' (${_aspectRatioString(imageWidth!, imageHeight!)})' : ''}',
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 10.5,
@@ -743,6 +790,7 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                                 onPressed: () => setState(() {
                                   image = null;
                                   originalImageBytes = null;
+                                  imageUrl = null;
                                   imageName = null;
                                   imageSizeBytes = null;
                                   imageWidth = null;

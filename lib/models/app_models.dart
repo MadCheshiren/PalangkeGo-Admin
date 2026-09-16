@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 enum AccountStatus { active, offline, suspended, blocked }
 
 enum ApplicationStatus { verified, reviewing, invalidDocs, rejected }
@@ -345,6 +347,8 @@ class Announcement {
     this.recipientCount = 0,
     this.deliveredCount = 0,
     this.failedCount = 0,
+    this.imageUrl,
+    this.imageBytes,
   });
 
   final String id;
@@ -361,6 +365,8 @@ class Announcement {
   final int recipientCount;
   final int deliveredCount;
   final int failedCount;
+  final String? imageUrl;
+  final Uint8List? imageBytes;
 
   Announcement copyWith({
     String? id,
@@ -377,6 +383,9 @@ class Announcement {
     int? recipientCount,
     int? deliveredCount,
     int? failedCount,
+    String? imageUrl,
+    Uint8List? imageBytes,
+    bool clearImage = false,
   }) =>
       Announcement(
         id: id ?? this.id,
@@ -393,5 +402,7 @@ class Announcement {
         recipientCount: recipientCount ?? this.recipientCount,
         deliveredCount: deliveredCount ?? this.deliveredCount,
         failedCount: failedCount ?? this.failedCount,
+        imageUrl: clearImage ? null : imageUrl ?? this.imageUrl,
+        imageBytes: clearImage ? null : imageBytes ?? this.imageBytes,
       );
 }

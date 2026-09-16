@@ -644,6 +644,37 @@ class _AnnouncementDetailDialog extends StatelessWidget {
               ),
               const SizedBox(height: 14),
 
+              // Feature Image if present
+              if (announcement.imageBytes != null ||
+                  (announcement.imageUrl != null && announcement.imageUrl!.isNotEmpty)) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    width: double.infinity,
+                    constraints: const BoxConstraints(maxHeight: 280),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: colors.subtleBorder),
+                    ),
+                    child: announcement.imageBytes != null
+                        ? Image.memory(
+                            announcement.imageBytes!,
+                            fit: BoxFit.cover,
+                          )
+                        : Image.asset(
+                            announcement.imageUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Image.network(
+                              announcement.imageUrl!,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+              ],
+
               // Metadata Cards Row
               Row(
                 children: [
