@@ -430,23 +430,23 @@ class _ApplicationTable extends StatelessWidget {
         .toList();
     return ScrollableDataTable(
       verticalController: verticalController,
-      minWidth: 1350,
+      minWidth: 1500,
       columnSpacing: 18,
       columns: const [
         DataColumn(
-          columnWidth: FlexColumnWidth(1.15),
+          columnWidth: FlexColumnWidth(1.25),
           label: Text('APPLICATION ID'),
         ),
         DataColumn(
-          columnWidth: FlexColumnWidth(1.35),
+          columnWidth: FlexColumnWidth(1.25),
           label: Text('APPLICANT'),
         ),
         DataColumn(
-          columnWidth: FlexColumnWidth(1.5),
+          columnWidth: FlexColumnWidth(1.35),
           label: Text('STALL NAME'),
         ),
         DataColumn(
-          columnWidth: FlexColumnWidth(.9),
+          columnWidth: FlexColumnWidth(0.95),
           label: Text('CATEGORY'),
         ),
         DataColumn(
@@ -454,11 +454,11 @@ class _ApplicationTable extends StatelessWidget {
           label: Text('DATE SUBMITTED'),
         ),
         DataColumn(
-          columnWidth: FlexColumnWidth(1.2),
-          label: Text('KYC STATUS'),
+          columnWidth: FlexColumnWidth(1.75),
+          label: Text('VERIFICATION STATUS'),
         ),
         DataColumn(
-          columnWidth: FlexColumnWidth(.7),
+          columnWidth: FlexColumnWidth(0.8),
           label: Text('ACTIONS'),
         ),
       ],

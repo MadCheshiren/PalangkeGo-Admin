@@ -462,7 +462,6 @@ class _ReportTable extends StatelessWidget {
                   : [
                       DataCell(
                         Row(
-                          mainAxisSize: MainAxisSize.min,
                           children: [
                             if (isNew)
                               Container(
@@ -474,7 +473,12 @@ class _ReportTable extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(2),
                                 ),
                               ),
-                            Text(item.type == 'Vendor' ? 'Stall Holder' : item.type),
+                            Expanded(
+                              child: Text(
+                                item.type == 'Vendor' ? 'Stall Holder' : item.type,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -539,12 +543,12 @@ class _ReportTable extends StatelessWidget {
         .toList();
     return ScrollableDataTable(
       verticalController: verticalController,
-      minWidth: history ? 1450 : 1300,
+      minWidth: history ? 1550 : 1450,
       columnSpacing: 18,
       columns: history
           ? const [
               DataColumn(
-                columnWidth: FlexColumnWidth(.85),
+                columnWidth: FlexColumnWidth(1.15),
                 label: Text('TYPE'),
               ),
               DataColumn(
@@ -552,11 +556,11 @@ class _ReportTable extends StatelessWidget {
                 label: Text('REPORT ID'),
               ),
               DataColumn(
-                columnWidth: FlexColumnWidth(1.35),
+                columnWidth: FlexColumnWidth(1.4),
                 label: Text('REPORTED USER'),
               ),
               DataColumn(
-                columnWidth: FlexColumnWidth(1.25),
+                columnWidth: FlexColumnWidth(1.3),
                 label: Text('REASON'),
               ),
               DataColumn(
@@ -564,29 +568,29 @@ class _ReportTable extends StatelessWidget {
                 label: Text('DECISION'),
               ),
               DataColumn(
-                columnWidth: FlexColumnWidth(1.25),
+                columnWidth: FlexColumnWidth(1.3),
                 label: Text('ACTION TAKEN'),
               ),
               DataColumn(
-                columnWidth: FlexColumnWidth(1.35),
+                columnWidth: FlexColumnWidth(1.4),
                 label: Text('RESOLVED DATE'),
               ),
               DataColumn(
-                columnWidth: FlexColumnWidth(1.15),
+                columnWidth: FlexColumnWidth(1.2),
                 label: Text('RESOLVED BY'),
               ),
             ]
           : const [
               DataColumn(
-                columnWidth: FlexColumnWidth(.85),
+                columnWidth: FlexColumnWidth(1.15),
                 label: Text('TYPE'),
               ),
               DataColumn(
-                columnWidth: FlexColumnWidth(1.4),
+                columnWidth: FlexColumnWidth(1.5),
                 label: Text('ACCOUNT / ISSUE'),
               ),
               DataColumn(
-                columnWidth: FlexColumnWidth(1.2),
+                columnWidth: FlexColumnWidth(1.3),
                 label: Text('SUBMITTED BY'),
               ),
               DataColumn(
@@ -598,7 +602,7 @@ class _ReportTable extends StatelessWidget {
                 label: Text('CATEGORY'),
               ),
               DataColumn(
-                columnWidth: FlexColumnWidth(.9),
+                columnWidth: FlexColumnWidth(1.0),
                 label: Text('DATE'),
               ),
               DataColumn(
@@ -606,7 +610,7 @@ class _ReportTable extends StatelessWidget {
                 label: Text('STATUS'),
               ),
               DataColumn(
-                columnWidth: FlexColumnWidth(.8),
+                columnWidth: FlexColumnWidth(1.1),
                 label: Text('PRIORITY'),
               ),
             ],
@@ -693,14 +697,17 @@ class _ReportTabs extends StatelessWidget {
   final ValueChanged<String> onChanged;
 
   @override
-  Widget build(BuildContext context) => Row(
-        children: [
-          _tab(context, 'All Complaints', selected == 'All Types'),
-          const SizedBox(width: 8),
-          _tab(context, 'Stall Holders', selected == 'Stall Holders'),
-          const SizedBox(width: 8),
-          _tab(context, 'Customers', selected == 'Customers'),
-        ],
+  Widget build(BuildContext context) => SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _tab(context, 'All Complaints', selected == 'All Types'),
+            const SizedBox(width: 8),
+            _tab(context, 'Stall Holders', selected == 'Stall Holders'),
+            const SizedBox(width: 8),
+            _tab(context, 'Customers', selected == 'Customers'),
+          ],
+        ),
       );
 
   Widget _tab(BuildContext context, String label, bool active) => Material(
@@ -834,178 +841,86 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
         : 'Stall Holder: ${widget.report.owner.isNotEmpty ? widget.report.owner : widget.report.vendorName}';
   }
 
-  Future<void> _dismissReport({bool markResolved = false}) async {
-    final resolutionNote = TextEditingController();
-    final title = markResolved ? 'Mark Report as Resolved?' : 'Dismiss Report?';
+  Future<void> _resolveReport(bool markResolved) async {
+    if (processing) return;
+    final title =
+        markResolved ? 'Resolve Report' : 'Dismiss Report Without Action';
     final confirmation = markResolved
-        ? 'This will mark the report as resolved without changing the account '
-            'status.'
+        ? 'Are you sure you want to mark this report as resolved?'
         : 'This will dismiss the report without changing the account status.';
-    try {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: Text(title),
-          content: SizedBox(
-            width: 420,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Report: #${widget.report.id}'),
-                const SizedBox(height: 7),
-                Text('Reported User: ${widget.report.accountIssue}'),
-                const SizedBox(height: 14),
-                Text(confirmation),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: resolutionNote,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Optional Resolution Note',
-                    hintText: 'Enter a note for the resolved report',
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child:
-                  Text(markResolved ? 'Mark as Resolved' : 'Confirm Dismiss'),
-            ),
-          ],
-        ),
-      );
-      if (confirmed != true || !mounted) return;
-      setState(() => processing = true);
-      final error = markResolved
-          ? await ref.read(appDataProvider.notifier).resolveReport(
-                reportId: widget.report.id,
-                note: resolutionNote.text,
-              )
-          : await ref.read(appDataProvider.notifier).dismissReport(
-                reportId: widget.report.id,
-                note: resolutionNote.text,
-              );
-      if (!mounted) return;
-      if (error != null) {
-        setState(() => processing = false);
-        _showError(error);
-        return;
-      }
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            markResolved
-                ? 'Report resolved successfully. Moved to Resolved Reports.'
-                : 'Report dismissed successfully. Moved to Resolved Reports.',
-          ),
-        ),
-      );
-    } finally {
-      resolutionNote.dispose();
+    final noteResult = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => _ResolveReportDialog(
+        title: title,
+        reportId: widget.report.id,
+        accountIssue: widget.report.accountIssue,
+        confirmation: confirmation,
+        markResolved: markResolved,
+      ),
+    );
+    if (noteResult == null || !mounted) return;
+    setState(() => processing = true);
+    final error = markResolved
+        ? await ref.read(appDataProvider.notifier).resolveReport(
+              reportId: widget.report.id,
+              note: noteResult,
+            )
+        : await ref.read(appDataProvider.notifier).dismissReport(
+              reportId: widget.report.id,
+              note: noteResult,
+            );
+    if (!mounted) return;
+    if (error != null) {
+      setState(() => processing = false);
+      _showError(error);
+      return;
     }
+    Navigator.pop(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          markResolved
+              ? 'Report resolved successfully. Moved to Resolved Reports.'
+              : 'Report dismissed successfully. Moved to Resolved Reports.',
+        ),
+      ),
+    );
   }
 
   Future<void> _blockAccount(_ReportedAccount? account) async {
     if (account == null || processing) return;
-    final reason = TextEditingController();
-    String? validationError;
-    try {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) => StatefulBuilder(
-          builder: (context, setDialogState) => AlertDialog(
-            title: const Text('Block Account?'),
-            content: SizedBox(
-              width: 430,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Reported User: ${account.name}'),
-                  const SizedBox(height: 6),
-                  Text('Account Type: ${account.type}'),
-                  const SizedBox(height: 6),
-                  Text('Related Report: #${widget.report.id}'),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: reason,
-                    minLines: 2,
-                    maxLines: 4,
-                    onChanged: (_) {
-                      if (validationError != null) {
-                        setDialogState(() => validationError = null);
-                      }
-                    },
-                    decoration: InputDecoration(
-                      labelText: 'Blocking Reason *',
-                      hintText: 'Enter the reason for blocking',
-                      errorText: validationError,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: semanticColors(context).danger,
-                ),
-                onPressed: () {
-                  if (reason.text.trim().isEmpty) {
-                    setDialogState(
-                      () => validationError = 'A blocking reason is required.',
-                    );
-                    return;
-                  }
-                  Navigator.pop(dialogContext, true);
-                },
-                icon: const Icon(Icons.block_outlined, size: 17),
-                label: const Text('Block Account'),
-              ),
-            ],
-          ),
-        ),
+    final reasonResult = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => _ReportBlockAccountDialog(
+        accountName: account.name,
+        accountType: account.type,
+        reportId: widget.report.id,
+      ),
+    );
+    if (reasonResult == null || reasonResult.isEmpty || !mounted) return;
+    setState(() => processing = true);
+    final error =
+        await ref.read(appDataProvider.notifier).blockAccountFromReport(
+              reportId: widget.report.id,
+              reason: reasonResult,
+            );
+    if (!mounted) return;
+    if (error != null) {
+      setState(() => processing = false);
+      _showError(error);
+      return;
+    }
+    Navigator.pop(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content:
+            Text('Account blocked successfully. Report moved to Resolved.'),
+      ),
+    );
+    if (mounted) {
+      context.go(
+        '/accounts?accountId=${Uri.encodeComponent(account.id)}&open=1',
       );
-      if (confirmed != true || !mounted) return;
-      setState(() => processing = true);
-      final error =
-          await ref.read(appDataProvider.notifier).blockAccountFromReport(
-                reportId: widget.report.id,
-                reason: reason.text,
-              );
-      if (!mounted) return;
-      if (error != null) {
-        setState(() => processing = false);
-        _showError(error);
-        return;
-      }
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content:
-              Text('Account blocked successfully. Report moved to Resolved.'),
-        ),
-      );
-      if (mounted) {
-        context.go(
-          '/accounts?accountId=${Uri.encodeComponent(account.id)}&open=1',
-        );
-      }
-    } finally {
-      reason.dispose();
     }
   }
 
@@ -1015,44 +930,20 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
   }
 
   Future<void> action(String title, ReportStatus value) async {
-    final input = TextEditingController();
-    try {
-      final result = await showDialog<String>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text(title),
-          content: TextField(
-            controller: input,
-            maxLines: 3,
-            decoration: const InputDecoration(
-              hintText: 'Add a reason or message...',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, input.text.trim()),
-              child: const Text('Confirm'),
-            ),
-          ],
-        ),
-      );
-      if (result == null || result.isEmpty || !mounted) return;
-      setState(() => processing = true);
-      await ref
-          .read(appDataProvider.notifier)
-          .updateReport(widget.report.id, value, result);
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('$title completed.')));
-      }
-    } finally {
-      input.dispose();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => _ReportActionInputDialog(title: title),
+    );
+    if (result == null || result.isEmpty || !mounted) return;
+    setState(() => processing = true);
+    await ref
+        .read(appDataProvider.notifier)
+        .updateReport(widget.report.id, value, result);
+    if (mounted) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('$title completed.')));
     }
   }
 
@@ -1296,7 +1187,7 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
     );
 
     final dismissBtn = OutlinedButton(
-      onPressed: processing ? null : _dismissReport,
+      onPressed: processing ? null : () => _resolveReport(false),
       style: outlineStyle,
       child: const Text('Dismiss Report', style: TextStyle(fontSize: 11.5)),
     );
@@ -1304,7 +1195,7 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
     final resolveBtn = FilledButton.icon(
       onPressed: processing
           ? null
-          : () => _dismissReport(markResolved: true),
+          : () => _resolveReport(true),
       style: resolvedStyle,
       icon: const Icon(Icons.check_circle_outline, size: 16),
       label: const Text('Mark as Resolved', style: TextStyle(fontSize: 11.5)),
@@ -1719,4 +1610,224 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
           ),
         ),
       );
+}
+
+class _ResolveReportDialog extends StatefulWidget {
+  const _ResolveReportDialog({
+    required this.title,
+    required this.reportId,
+    required this.accountIssue,
+    required this.confirmation,
+    required this.markResolved,
+  });
+
+  final String title;
+  final String reportId;
+  final String accountIssue;
+  final String confirmation;
+  final bool markResolved;
+
+  @override
+  State<_ResolveReportDialog> createState() => _ResolveReportDialogState();
+}
+
+class _ResolveReportDialogState extends State<_ResolveReportDialog> {
+  late final TextEditingController _noteController;
+
+  @override
+  void initState() {
+    super.initState();
+    _noteController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _noteController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Report: #${widget.reportId}'),
+            const SizedBox(height: 7),
+            Text('Reported User: ${widget.accountIssue}'),
+            const SizedBox(height: 14),
+            Text(widget.confirmation),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _noteController,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Optional Resolution Note',
+                hintText: 'Enter a note for the resolved report',
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, null),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _noteController.text.trim()),
+          child: Text(
+            widget.markResolved ? 'Mark as Resolved' : 'Confirm Dismiss',
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ReportBlockAccountDialog extends StatefulWidget {
+  const _ReportBlockAccountDialog({
+    required this.accountName,
+    required this.accountType,
+    required this.reportId,
+  });
+
+  final String accountName;
+  final String accountType;
+  final String reportId;
+
+  @override
+  State<_ReportBlockAccountDialog> createState() =>
+      _ReportBlockAccountDialogState();
+}
+
+class _ReportBlockAccountDialogState extends State<_ReportBlockAccountDialog> {
+  late final TextEditingController _reasonController;
+  String? _validationError;
+
+  @override
+  void initState() {
+    super.initState();
+    _reasonController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Block Account?'),
+      content: SizedBox(
+        width: 430,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Reported User: ${widget.accountName}'),
+            const SizedBox(height: 6),
+            Text('Account Type: ${widget.accountType}'),
+            const SizedBox(height: 6),
+            Text('Related Report: #${widget.reportId}'),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _reasonController,
+              minLines: 2,
+              maxLines: 4,
+              onChanged: (_) {
+                if (_validationError != null) {
+                  setState(() => _validationError = null);
+                }
+              },
+              decoration: InputDecoration(
+                labelText: 'Blocking Reason *',
+                hintText: 'Enter the reason for blocking',
+                errorText: _validationError,
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, null),
+          child: const Text('Cancel'),
+        ),
+        FilledButton.icon(
+          style: FilledButton.styleFrom(
+            backgroundColor: semanticColors(context).danger,
+          ),
+          onPressed: () {
+            final reason = _reasonController.text.trim();
+            if (reason.isEmpty) {
+              setState(
+                () => _validationError = 'A blocking reason is required.',
+              );
+              return;
+            }
+            Navigator.pop(context, reason);
+          },
+          icon: const Icon(Icons.block_outlined, size: 17),
+          label: const Text('Block Account'),
+        ),
+      ],
+    );
+  }
+}
+
+class _ReportActionInputDialog extends StatefulWidget {
+  const _ReportActionInputDialog({required this.title});
+  final String title;
+
+  @override
+  State<_ReportActionInputDialog> createState() =>
+      _ReportActionInputDialogState();
+}
+
+class _ReportActionInputDialogState extends State<_ReportActionInputDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: TextField(
+        controller: _controller,
+        maxLines: 3,
+        autofocus: true,
+        decoration: const InputDecoration(
+          hintText: 'Add a reason or message...',
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, null),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _controller.text.trim()),
+          child: const Text('Confirm'),
+        ),
+      ],
+    );
+  }
 }

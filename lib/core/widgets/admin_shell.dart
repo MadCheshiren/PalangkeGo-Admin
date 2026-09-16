@@ -16,6 +16,7 @@ class AdminShell extends ConsumerWidget {
   final Widget child;
   static const navItems = [
     ('Overview', '/overview', Icons.home_outlined),
+    ('Sales Reports', '/sales-reports', Icons.bar_chart_rounded),
     ('Accounts', '/accounts', Icons.people_outline_rounded),
     ('Stall Holder Application', '/applications', Icons.verified_user_outlined),
     ('Renewal', '/renewal', Icons.autorenew_rounded),
@@ -99,43 +100,40 @@ class _TopNavigation extends ConsumerWidget {
                 ),
               ],
             )
-          : Stack(
-              alignment: Alignment.center,
+          : Row(
               children: [
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: AppLogo(dark: true, showAdminBadge: true),
-                ),
-                Center(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        for (final item in AdminShell.navItems)
-                          _NavItem(
-                            label: item.$1,
-                            path: item.$2,
-                            icon: item.$3,
-                            active: current == item.$2,
-                          ),
-                      ],
+                const AppLogo(dark: true, showAdminBadge: true),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Center(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (final item in AdminShell.navItems)
+                            _NavItem(
+                              label: item.$1,
+                              path: item.$2,
+                              icon: item.$3,
+                              active: current == item.$2,
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      const _ThemeToggleButton(),
-                      const SizedBox(width: 6),
-                      const NotificationBell(),
-                      const SizedBox(width: 10),
-                      const AdminProfileMenu(compact: false),
-                    ],
-                  ),
+                const SizedBox(width: 12),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const _ThemeToggleButton(),
+                    const SizedBox(width: 6),
+                    const NotificationBell(),
+                    const SizedBox(width: 10),
+                    const AdminProfileMenu(compact: false),
+                  ],
                 ),
               ],
             ),

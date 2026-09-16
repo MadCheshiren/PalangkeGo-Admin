@@ -18,6 +18,48 @@ import 'package:palengkego_admin/features/sales_reports/sales_reports_page.dart'
 import 'package:palengkego_admin/features/vendor_applications/vendor_applications_page.dart';
 import 'package:palengkego_admin/features/vendor_applications/verification_dialog.dart';
 
+Future<void> _testZeroOverflow(
+  WidgetTester tester, {
+  required Size size,
+  required String viewportName,
+  required Widget widget,
+}) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+
+  final errors = <FlutterErrorDetails>[];
+  final originalOnError = FlutterError.onError;
+  FlutterError.onError = (details) => errors.add(details);
+
+  try {
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(preferences),
+        ],
+        child: MaterialApp(
+          theme: buildLightTheme(),
+          home: Scaffold(body: widget),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+  } finally {
+    FlutterError.onError = originalOnError;
+  }
+
+  final overflowErrors = errors
+      .where((e) => e.exceptionAsString().contains('overflowed by'))
+      .toList();
+  expect(overflowErrors, isEmpty,
+      reason: 'Expected 0 overflow errors on $viewportName');
+}
+
 void main() {
   const viewports = <String, Size>{
     'Phone (360x780)': Size(360, 780),
@@ -31,436 +73,121 @@ void main() {
     final size = entry.value;
 
     testWidgets('Zero overflow in LoginPage on $viewportName', (tester) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      final errors = <FlutterErrorDetails>[];
-      final originalOnError = FlutterError.onError;
-      FlutterError.onError = (details) => errors.add(details);
-      addTearDown(() => FlutterError.onError = originalOnError);
-
-      SharedPreferences.setMockInitialValues({});
-      final preferences = await SharedPreferences.getInstance();
-
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            sharedPreferencesProvider.overrideWithValue(preferences),
-          ],
-          child: MaterialApp(
-            theme: buildLightTheme(),
-            home: const Scaffold(body: LoginPage()),
-          ),
-        ),
+      await _testZeroOverflow(
+        tester,
+        size: size,
+        viewportName: viewportName,
+        widget: const LoginPage(),
       );
-      await tester.pumpAndSettle();
-
-      final overflowErrors = errors
-          .where((e) => e.exceptionAsString().contains('overflowed by'))
-          .toList();
-      expect(overflowErrors, isEmpty,
-          reason: 'Expected 0 overflow errors on $viewportName');
     });
 
-    testWidgets('Zero overflow in OverviewPage on $viewportName',
-        (tester) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      final errors = <FlutterErrorDetails>[];
-      final originalOnError = FlutterError.onError;
-      FlutterError.onError = (details) => errors.add(details);
-      addTearDown(() => FlutterError.onError = originalOnError);
-
-      SharedPreferences.setMockInitialValues({});
-      final preferences = await SharedPreferences.getInstance();
-
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            sharedPreferencesProvider.overrideWithValue(preferences),
-          ],
-          child: MaterialApp(
-            theme: buildLightTheme(),
-            home: const Scaffold(body: OverviewPage()),
-          ),
-        ),
+    testWidgets('Zero overflow in OverviewPage on $viewportName', (tester) async {
+      await _testZeroOverflow(
+        tester,
+        size: size,
+        viewportName: viewportName,
+        widget: const OverviewPage(),
       );
-      await tester.pumpAndSettle();
-
-      final overflowErrors = errors
-          .where((e) => e.exceptionAsString().contains('overflowed by'))
-          .toList();
-      expect(overflowErrors, isEmpty,
-          reason: 'Expected 0 overflow errors on $viewportName');
     });
 
-    testWidgets('Zero overflow in AccountsPage on $viewportName',
-        (tester) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      final errors = <FlutterErrorDetails>[];
-      final originalOnError = FlutterError.onError;
-      FlutterError.onError = (details) => errors.add(details);
-      addTearDown(() => FlutterError.onError = originalOnError);
-
-      SharedPreferences.setMockInitialValues({});
-      final preferences = await SharedPreferences.getInstance();
-
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            sharedPreferencesProvider.overrideWithValue(preferences),
-          ],
-          child: MaterialApp(
-            theme: buildLightTheme(),
-            home: const Scaffold(body: AccountsPage()),
-          ),
-        ),
+    testWidgets('Zero overflow in AccountsPage on $viewportName', (tester) async {
+      await _testZeroOverflow(
+        tester,
+        size: size,
+        viewportName: viewportName,
+        widget: const AccountsPage(),
       );
-      await tester.pumpAndSettle();
-
-      final overflowErrors = errors
-          .where((e) => e.exceptionAsString().contains('overflowed by'))
-          .toList();
-      expect(overflowErrors, isEmpty,
-          reason: 'Expected 0 overflow errors on $viewportName');
     });
 
-    testWidgets('Zero overflow in VendorApplicationsPage on $viewportName',
-        (tester) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      final errors = <FlutterErrorDetails>[];
-      final originalOnError = FlutterError.onError;
-      FlutterError.onError = (details) => errors.add(details);
-      addTearDown(() => FlutterError.onError = originalOnError);
-
-      SharedPreferences.setMockInitialValues({});
-      final preferences = await SharedPreferences.getInstance();
-
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            sharedPreferencesProvider.overrideWithValue(preferences),
-          ],
-          child: MaterialApp(
-            theme: buildLightTheme(),
-            home: const Scaffold(body: VendorApplicationsPage()),
-          ),
-        ),
+    testWidgets('Zero overflow in VendorApplicationsPage on $viewportName', (tester) async {
+      await _testZeroOverflow(
+        tester,
+        size: size,
+        viewportName: viewportName,
+        widget: const VendorApplicationsPage(),
       );
-      await tester.pumpAndSettle();
-
-      final overflowErrors = errors
-          .where((e) => e.exceptionAsString().contains('overflowed by'))
-          .toList();
-      expect(overflowErrors, isEmpty,
-          reason: 'Expected 0 overflow errors on $viewportName');
     });
 
-    testWidgets('Zero overflow in RenewalsPage on $viewportName',
-        (tester) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      final errors = <FlutterErrorDetails>[];
-      final originalOnError = FlutterError.onError;
-      FlutterError.onError = (details) => errors.add(details);
-      addTearDown(() => FlutterError.onError = originalOnError);
-
-      SharedPreferences.setMockInitialValues({});
-      final preferences = await SharedPreferences.getInstance();
-
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            sharedPreferencesProvider.overrideWithValue(preferences),
-          ],
-          child: MaterialApp(
-            theme: buildLightTheme(),
-            home: const Scaffold(body: RenewalsPage()),
-          ),
-        ),
+    testWidgets('Zero overflow in RenewalsPage on $viewportName', (tester) async {
+      await _testZeroOverflow(
+        tester,
+        size: size,
+        viewportName: viewportName,
+        widget: const RenewalsPage(),
       );
-      await tester.pumpAndSettle();
-
-      final overflowErrors = errors
-          .where((e) => e.exceptionAsString().contains('overflowed by'))
-          .toList();
-      expect(overflowErrors, isEmpty,
-          reason: 'Expected 0 overflow errors on $viewportName');
     });
 
-    testWidgets('Zero overflow in ReportsPage on $viewportName',
-        (tester) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      final errors = <FlutterErrorDetails>[];
-      final originalOnError = FlutterError.onError;
-      FlutterError.onError = (details) => errors.add(details);
-      addTearDown(() => FlutterError.onError = originalOnError);
-
-      SharedPreferences.setMockInitialValues({});
-      final preferences = await SharedPreferences.getInstance();
-
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            sharedPreferencesProvider.overrideWithValue(preferences),
-          ],
-          child: MaterialApp(
-            theme: buildLightTheme(),
-            home: const Scaffold(body: ReportsPage()),
-          ),
-        ),
+    testWidgets('Zero overflow in ReportsPage on $viewportName', (tester) async {
+      await _testZeroOverflow(
+        tester,
+        size: size,
+        viewportName: viewportName,
+        widget: const ReportsPage(),
       );
-      await tester.pumpAndSettle();
-
-      final overflowErrors = errors
-          .where((e) => e.exceptionAsString().contains('overflowed by'))
-          .toList();
-      expect(overflowErrors, isEmpty,
-          reason: 'Expected 0 overflow errors on $viewportName');
     });
 
-    testWidgets('Zero overflow in SalesReportsPage on $viewportName',
-        (tester) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      final errors = <FlutterErrorDetails>[];
-      final originalOnError = FlutterError.onError;
-      FlutterError.onError = (details) => errors.add(details);
-      addTearDown(() => FlutterError.onError = originalOnError);
-
-      SharedPreferences.setMockInitialValues({});
-      final preferences = await SharedPreferences.getInstance();
-
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            sharedPreferencesProvider.overrideWithValue(preferences),
-          ],
-          child: MaterialApp(
-            theme: buildLightTheme(),
-            home: const Scaffold(body: SalesReportsPage()),
-          ),
-        ),
+    testWidgets('Zero overflow in SalesReportsPage on $viewportName', (tester) async {
+      await _testZeroOverflow(
+        tester,
+        size: size,
+        viewportName: viewportName,
+        widget: const SalesReportsPage(),
       );
-      await tester.pumpAndSettle();
-
-      final overflowErrors = errors
-          .where((e) => e.exceptionAsString().contains('overflowed by'))
-          .toList();
-      expect(overflowErrors, isEmpty,
-          reason: 'Expected 0 overflow errors on $viewportName');
     });
 
-    testWidgets('Zero overflow in AnnouncementHistoryPage on $viewportName',
-        (tester) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      final errors = <FlutterErrorDetails>[];
-      final originalOnError = FlutterError.onError;
-      FlutterError.onError = (details) => errors.add(details);
-      addTearDown(() => FlutterError.onError = originalOnError);
-
-      SharedPreferences.setMockInitialValues({});
-      final preferences = await SharedPreferences.getInstance();
-
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            sharedPreferencesProvider.overrideWithValue(preferences),
-          ],
-          child: MaterialApp(
-            theme: buildLightTheme(),
-            home: const Scaffold(body: AnnouncementHistoryPage()),
-          ),
-        ),
+    testWidgets('Zero overflow in AnnouncementHistoryPage on $viewportName', (tester) async {
+      await _testZeroOverflow(
+        tester,
+        size: size,
+        viewportName: viewportName,
+        widget: const AnnouncementHistoryPage(),
       );
-      await tester.pumpAndSettle();
-
-      final overflowErrors = errors
-          .where((e) => e.exceptionAsString().contains('overflowed by'))
-          .toList();
-      expect(overflowErrors, isEmpty,
-          reason: 'Expected 0 overflow errors on $viewportName');
     });
 
-    testWidgets('Zero overflow in NotificationsPage on $viewportName',
-        (tester) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      final errors = <FlutterErrorDetails>[];
-      final originalOnError = FlutterError.onError;
-      FlutterError.onError = (details) => errors.add(details);
-      addTearDown(() => FlutterError.onError = originalOnError);
-
-      SharedPreferences.setMockInitialValues({});
-      final preferences = await SharedPreferences.getInstance();
-
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            sharedPreferencesProvider.overrideWithValue(preferences),
-          ],
-          child: MaterialApp(
-            theme: buildLightTheme(),
-            home: const Scaffold(body: NotificationsPage()),
-          ),
-        ),
+    testWidgets('Zero overflow in NotificationsPage on $viewportName', (tester) async {
+      await _testZeroOverflow(
+        tester,
+        size: size,
+        viewportName: viewportName,
+        widget: const NotificationsPage(),
       );
-      await tester.pumpAndSettle();
-
-      final overflowErrors = errors
-          .where((e) => e.exceptionAsString().contains('overflowed by'))
-          .toList();
-      expect(overflowErrors, isEmpty,
-          reason: 'Expected 0 overflow errors on $viewportName');
     });
 
-    testWidgets('Zero overflow in AuditLogPage on $viewportName',
-        (tester) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      final errors = <FlutterErrorDetails>[];
-      final originalOnError = FlutterError.onError;
-      FlutterError.onError = (details) => errors.add(details);
-      addTearDown(() => FlutterError.onError = originalOnError);
-
-      SharedPreferences.setMockInitialValues({});
-      final preferences = await SharedPreferences.getInstance();
-
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            sharedPreferencesProvider.overrideWithValue(preferences),
-          ],
-          child: MaterialApp(
-            theme: buildLightTheme(),
-            home: const Scaffold(body: AuditLogPage()),
-          ),
-        ),
+    testWidgets('Zero overflow in AuditLogPage on $viewportName', (tester) async {
+      await _testZeroOverflow(
+        tester,
+        size: size,
+        viewportName: viewportName,
+        widget: const AuditLogPage(),
       );
-      await tester.pumpAndSettle();
-
-      final overflowErrors = errors
-          .where((e) => e.exceptionAsString().contains('overflowed by'))
-          .toList();
-      expect(overflowErrors, isEmpty,
-          reason: 'Expected 0 overflow errors on $viewportName');
     });
 
-    testWidgets('Zero overflow in VerificationDialog on $viewportName',
-        (tester) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      final errors = <FlutterErrorDetails>[];
-      final originalOnError = FlutterError.onError;
-      FlutterError.onError = (details) => errors.add(details);
-      addTearDown(() => FlutterError.onError = originalOnError);
-
-      SharedPreferences.setMockInitialValues({});
-      final preferences = await SharedPreferences.getInstance();
-
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            sharedPreferencesProvider.overrideWithValue(preferences),
-          ],
-          child: MaterialApp(
-            theme: buildLightTheme(),
-            home: Scaffold(
-              body: VerificationDialog.application(
-                VendorApplication(
-                  id: 'APP-1001',
-                  applicant: 'Juan Dela Cruz',
-                  stallName: 'Fresh Veggies',
-                  category: 'Vegetables',
-                  location: 'Section A, Stall 12',
-                  status: ApplicationStatus.reviewing,
-                  submittedAt: DateTime.now(),
-                ),
-              ),
-            ),
+    testWidgets('Zero overflow in VerificationDialog on $viewportName', (tester) async {
+      await _testZeroOverflow(
+        tester,
+        size: size,
+        viewportName: viewportName,
+        widget: VerificationDialog.application(
+          VendorApplication(
+            id: 'APP-1001',
+            applicant: 'Juan Dela Cruz',
+            stallName: 'Fresh Veggies',
+            category: 'Vegetables',
+            location: 'Section A, Stall 12',
+            status: ApplicationStatus.reviewing,
+            submittedAt: DateTime.now(),
           ),
         ),
       );
-      await tester.pumpAndSettle();
-
-      final overflowErrors = errors
-          .where((e) => e.exceptionAsString().contains('overflowed by'))
-          .toList();
-      expect(overflowErrors, isEmpty,
-          reason: 'Expected 0 overflow errors on $viewportName');
     });
 
-    testWidgets('Zero overflow in AnnouncementDialog on $viewportName',
-        (tester) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      final errors = <FlutterErrorDetails>[];
-      final originalOnError = FlutterError.onError;
-      FlutterError.onError = (details) => errors.add(details);
-      addTearDown(() => FlutterError.onError = originalOnError);
-
-      SharedPreferences.setMockInitialValues({});
-      final preferences = await SharedPreferences.getInstance();
-
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            sharedPreferencesProvider.overrideWithValue(preferences),
-          ],
-          child: MaterialApp(
-            theme: buildLightTheme(),
-            home: const Scaffold(
-              body: AnnouncementDialog(),
-            ),
-          ),
-        ),
+    testWidgets('Zero overflow in AnnouncementDialog on $viewportName', (tester) async {
+      await _testZeroOverflow(
+        tester,
+        size: size,
+        viewportName: viewportName,
+        widget: const AnnouncementDialog(),
       );
-      await tester.pumpAndSettle();
-
-      final overflowErrors = errors
-          .where((e) => e.exceptionAsString().contains('overflowed by'))
-          .toList();
-      expect(overflowErrors, isEmpty,
-          reason: 'Expected 0 overflow errors on $viewportName');
     });
   }
 }

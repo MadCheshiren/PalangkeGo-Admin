@@ -234,7 +234,7 @@ class PageHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = semanticColors(context);
-    final isCompact = MediaQuery.sizeOf(context).width < 768;
+    final isCompact = MediaQuery.sizeOf(context).width < 900;
     final horizontalPad = Responsive.horizontalPadding(context);
 
     return Container(
@@ -792,7 +792,7 @@ class Toolbar extends StatelessWidget {
         ),
       ),
       child: LayoutBuilder(
-        builder: (context, constraints) => constraints.maxWidth < 680
+        builder: (context, constraints) => constraints.maxWidth < 750
             ? Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [search, const SizedBox(height: 8), controls],
@@ -1465,6 +1465,7 @@ class ScrollableDataTable extends StatelessWidget {
   Widget build(BuildContext context) => RepaintBoundary(
         child: LayoutBuilder(
           builder: (context, constraints) {
+          final colors = semanticColors(context);
           final tableWidth =
               constraints.maxWidth > minWidth ? constraints.maxWidth : minWidth;
 
@@ -1477,16 +1478,16 @@ class ScrollableDataTable extends StatelessWidget {
                 child: DataTable(
                   showCheckboxColumn: false,
                   headingRowColor: WidgetStatePropertyAll(
-                    semanticColors(context).tableHeader,
+                    colors.tableHeader,
                   ),
                   headingTextStyle: GoogleFonts.inter(
-                    color: semanticColors(context).secondaryText,
+                    color: colors.secondaryText,
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 0.6,
                   ),
                   dataTextStyle: GoogleFonts.inter(
-                    color: semanticColors(context).primaryText,
+                    color: colors.primaryText,
                     fontSize: 13,
                   ),
                   headingRowHeight: headingHeight,
@@ -1497,9 +1498,9 @@ class ScrollableDataTable extends StatelessWidget {
                   rows: tableRows,
                   dataRowColor: WidgetStateProperty.resolveWith((states) {
                     if (states.contains(WidgetState.hovered)) {
-                      return semanticColors(context).hoverSurface;
+                      return colors.hoverSurface;
                     }
-                    return semanticColors(context).cardBackground;
+                    return colors.cardBackground;
                   }),
                 ),
               );

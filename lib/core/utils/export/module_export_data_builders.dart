@@ -261,7 +261,7 @@ class ApplicationExportData {
       const ReportColumn(label: 'Stall Name', flex: 1.5),
       const ReportColumn(label: 'Category', flex: 1.0),
       const ReportColumn(label: 'Date Submitted', flex: 1.2),
-      const ReportColumn(label: 'KYC Status', flex: 1.1),
+      const ReportColumn(label: 'Verification Status', flex: 1.1),
       if (hasReviewDetails) ...const [
         ReportColumn(label: 'Review Date', flex: 1.1),
         ReportColumn(label: 'Reviewer', flex: 1.1),
@@ -375,7 +375,7 @@ class RenewalExportData {
       ReportColumn(label: 'Stall Name', flex: 1.5),
       ReportColumn(label: 'Category', flex: 1.0),
       ReportColumn(label: 'Expiry Date', flex: 1.5),
-      ReportColumn(label: 'KYC Status', flex: 1.1),
+      ReportColumn(label: 'Verification Status', flex: 1.1),
     ];
 
     final rows = filteredRenewals.map((r) {

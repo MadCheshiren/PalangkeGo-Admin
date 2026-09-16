@@ -539,8 +539,10 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                       fontWeight: FontWeight.w800,
                     ),
                   ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       TextButton.icon(
                         onPressed: () {
@@ -553,7 +555,6 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                           style: TextStyle(fontSize: 11),
                         ),
                       ),
-                      const SizedBox(width: 8),
                       StatusBadge(
                         label: isEditMode
                             ? (widget.announcementToEdit!.isDraft
@@ -854,27 +855,30 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
               const SizedBox(height: 16),
               LayoutBuilder(
                 builder: (context, constraints) {
-                  final isCompact = constraints.maxWidth < 560;
-                  final notifyRow = Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: Checkbox(
-                          value: notify,
-                          onChanged: (value) =>
-                              setState(() => notify = value ?? false),
+                  final notifyRow = ConstrainedBox(
+                    constraints:
+                        BoxConstraints(maxWidth: constraints.maxWidth),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: Checkbox(
+                            value: notify,
+                            onChanged: (value) =>
+                                setState(() => notify = value ?? false),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 5),
-                      const Flexible(
-                        child: Text(
-                          'Send push notification to mobile app',
-                          style: TextStyle(fontSize: 11),
+                        const SizedBox(width: 5),
+                        const Flexible(
+                          child: Text(
+                            'Send push notification to mobile app',
+                            style: TextStyle(fontSize: 11),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   );
 
                   final buttons = [
@@ -885,7 +889,6 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                         style: const TextStyle(fontSize: 11),
                       ),
                     ),
-                    const SizedBox(width: 8),
                     FilledButton.icon(
                       onPressed: loading ? null : () => save(false),
                       icon: loading
@@ -910,27 +913,19 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                     ),
                   ];
 
-                  if (isCompact) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        notifyRow,
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          alignment: WrapAlignment.end,
-                          children: buttons,
-                        ),
-                      ],
-                    );
-                  }
-
-                  return Row(
+                  return Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 12,
+                    runSpacing: 12,
                     children: [
                       notifyRow,
-                      const Spacer(),
-                      ...buttons,
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: buttons,
+                      ),
                     ],
                   );
                 },

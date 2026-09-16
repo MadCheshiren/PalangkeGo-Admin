@@ -12,6 +12,7 @@ import '../../data/repositories/mock_repository.dart';
 import '../../models/admin_models.dart';
 import '../../models/app_models.dart';
 import '../announcements/announcement_dialog.dart';
+import '../vendor_applications/verification_dialog.dart';
 
 enum OverviewPanelId { kyc, topSellers, announcements }
 
@@ -258,6 +259,7 @@ class _OverviewPageState extends ConsumerState<OverviewPage> {
       }
 
       return _ResizablePanel(
+        key: ValueKey(state.id),
         state: state,
         index: index,
         headerAction: headerAction,
@@ -424,8 +426,9 @@ class _OverviewPageState extends ConsumerState<OverviewPage> {
   }
 }
 
-class _ResizablePanel extends StatefulWidget {
+class _ResizablePanel extends StatelessWidget {
   const _ResizablePanel({
+    super.key,
     required this.state,
     required this.index,
     required this.headerAction,
@@ -442,25 +445,50 @@ class _ResizablePanel extends StatefulWidget {
   final VoidCallback onStateChanged;
 
   @override
-  State<_ResizablePanel> createState() => _ResizablePanelState();
-}
-
-class _ResizablePanelState extends State<_ResizablePanel> {
-  double _dragX = 0;
-  double _dragY = 0;
-  bool _isResizing = false;
-
-  @override
   Widget build(BuildContext context) {
     final colors = semanticColors(context);
 
     final headerControls = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        widget.headerAction,
+        headerAction,
+        const SizedBox(width: 6),
+        Tooltip(
+          message: state.isZoomed
+              ? 'Collapse panel to default'
+              : 'Expand / Zoom panel',
+          child: InkWell(
+            onTap: () {
+              if (state.isZoomed) {
+                state.isFullWidth = state.defaultFullWidth;
+                state.isExpanded = state.defaultExpanded;
+              } else {
+                state.isFullWidth = true;
+                state.isExpanded = true;
+              }
+              onStateChanged();
+            },
+            borderRadius: BorderRadius.circular(6),
+            child: Container(
+              padding: const EdgeInsets.all(5),
+              decoration: BoxDecoration(
+                color: colors.hoverSurface,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: colors.subtleBorder),
+              ),
+              child: Icon(
+                state.isZoomed
+                    ? Icons.close_fullscreen_rounded
+                    : Icons.open_in_full_rounded,
+                size: 16,
+                color: colors.secondaryText,
+              ),
+            ),
+          ),
+        ),
         const SizedBox(width: 6),
         Draggable<int>(
-          data: widget.index,
+          data: index,
           feedback: Material(
             color: Colors.transparent,
             child: ConstrainedBox(
@@ -470,14 +498,14 @@ class _ResizablePanelState extends State<_ResizablePanel> {
                 child: Transform.scale(
                   scale: 1.02,
                   child: DataPanel(
-                    title: widget.state.title,
+                    title: state.title,
                     titleStyle: GoogleFonts.inter(
                       color: colors.primaryText,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
-                    headerAction: widget.headerAction,
-                    child: widget.childWidget,
+                    headerAction: headerAction,
+                    child: childWidget,
                   ),
                 ),
               ),
@@ -506,129 +534,24 @@ class _ResizablePanelState extends State<_ResizablePanel> {
       ],
     );
 
-    final cardContent = Stack(
-      clipBehavior: Clip.none,
-      children: [
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeInOutCubic,
-          child: DataPanel(
-            title: widget.state.title,
-            titleStyle: GoogleFonts.inter(
-              color: colors.primaryText,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-            headerAction: headerControls,
-            child: widget.childWidget,
-          ),
+    final cardContent = AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOutCubic,
+      child: DataPanel(
+        title: state.title,
+        titleStyle: GoogleFonts.inter(
+          color: colors.primaryText,
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
         ),
-        Positioned(
-          right: 8,
-          bottom: 8,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onPanStart: (_) {
-              setState(() {
-                _dragX = 0;
-                _dragY = 0;
-                _isResizing = true;
-              });
-            },
-            onPanUpdate: (details) {
-              _dragX += details.delta.dx;
-              _dragY += details.delta.dy;
-
-              if (_dragX > 35 && !widget.state.isFullWidth) {
-                widget.state.isFullWidth = true;
-                _dragX = 0;
-                widget.onStateChanged();
-              } else if (_dragX < -35 && widget.state.isFullWidth) {
-                widget.state.isFullWidth = false;
-                _dragX = 0;
-                widget.onStateChanged();
-              }
-
-              if (_dragY > 30 && !widget.state.isExpanded) {
-                widget.state.isExpanded = true;
-                _dragY = 0;
-                widget.onStateChanged();
-              } else if (_dragY < -30 && widget.state.isExpanded) {
-                widget.state.isExpanded = false;
-                _dragY = 0;
-                widget.onStateChanged();
-              }
-            },
-            onPanEnd: (_) {
-              setState(() {
-                _dragX = 0;
-                _dragY = 0;
-                _isResizing = false;
-              });
-            },
-            onPanCancel: () {
-              setState(() {
-                _dragX = 0;
-                _dragY = 0;
-                _isResizing = false;
-              });
-            },
-            child: Tooltip(
-              message: widget.state.isZoomed
-                  ? 'Click to return to original size'
-                  : 'Click to zoom\nDrag corner to resize',
-              child: InkWell(
-                onTap: () {
-                  if (widget.state.isZoomed) {
-                    widget.state.isFullWidth = widget.state.defaultFullWidth;
-                    widget.state.isExpanded = widget.state.defaultExpanded;
-                  } else {
-                    widget.state.isFullWidth = true;
-                    widget.state.isExpanded = true;
-                  }
-                  widget.onStateChanged();
-                },
-                borderRadius: BorderRadius.circular(6),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.all(5),
-                  decoration: BoxDecoration(
-                    color: _isResizing
-                        ? const Color(0xFF10B981)
-                        : colors.cardBackground,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                      color: _isResizing
-                          ? const Color(0xFF059669)
-                          : colors.subtleBorder,
-                      width: 1.5,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: _isResizing ? 0.15 : 0.06),
-                        blurRadius: _isResizing ? 8 : 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Icon(
-                    widget.state.isZoomed
-                        ? Icons.close_fullscreen_rounded
-                        : Icons.open_in_full_rounded,
-                    size: 13,
-                    color: _isResizing ? Colors.white : colors.secondaryText,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
+        headerAction: headerControls,
+        child: childWidget,
+      ),
     );
 
     return DragTarget<int>(
-      onWillAcceptWithDetails: (details) => details.data != widget.index,
-      onAcceptWithDetails: (details) => widget.onReorder(details.data, widget.index),
+      onWillAcceptWithDetails: (details) => details.data != index,
+      onAcceptWithDetails: (details) => onReorder(details.data, index),
       builder: (context, candidateData, rejectedData) {
         final isHoveringTarget = candidateData.isNotEmpty;
         return AnimatedContainer(
@@ -810,10 +733,14 @@ class _ApprovalTable extends StatelessWidget {
   final List<VendorApplication> items;
   @override
   Widget build(BuildContext context) {
+    final colors = semanticColors(context);
     final rows = items
         .map(
           (item) => DataRow(
-            onSelectChanged: (_) => context.go('/applications'),
+            onSelectChanged: (_) => showBlurredDialog(
+              context,
+              (context) => VerificationDialog.application(item),
+            ),
             cells: [
               DataCell(Text(item.id)),
               DataCell(
@@ -833,7 +760,10 @@ class _ApprovalTable extends StatelessWidget {
               DataCell(
                 TableActionReviewButton(
                   tooltip: 'Review application ${item.id}',
-                  onPressed: () => context.go('/applications'),
+                  onPressed: () => showBlurredDialog(
+                    context,
+                    (context) => VerificationDialog.application(item),
+                  ),
                 ),
               ),
             ],
@@ -850,16 +780,16 @@ class _ApprovalTable extends StatelessWidget {
           child: DataTable(
             showCheckboxColumn: false,
             headingRowColor: WidgetStatePropertyAll(
-              semanticColors(context).tableHeader,
+              colors.tableHeader,
             ),
             headingTextStyle: GoogleFonts.inter(
-              color: semanticColors(context).secondaryText,
+              color: colors.secondaryText,
               fontSize: 12,
               fontWeight: FontWeight.w800,
               letterSpacing: 0.6,
             ),
             dataTextStyle: GoogleFonts.inter(
-              color: semanticColors(context).primaryText,
+              color: colors.primaryText,
               fontSize: 13,
             ),
             headingRowHeight: 44,
@@ -872,15 +802,15 @@ class _ApprovalTable extends StatelessWidget {
               DataColumn(label: Text('APPLICANT')),
               DataColumn(label: Text('STALL NAME')),
               DataColumn(label: Text('CATEGORY')),
-              DataColumn(label: Text('STATUS')),
+              DataColumn(label: Text('VERIFICATION STATUS')),
               DataColumn(label: Text('ACTIONS')),
             ],
             rows: rows,
             dataRowColor: WidgetStateProperty.resolveWith((states) {
               if (states.contains(WidgetState.hovered)) {
-                return semanticColors(context).hoverSurface;
+                return colors.hoverSurface;
               }
-              return semanticColors(context).cardBackground;
+              return colors.cardBackground;
             }),
           ),
         ),

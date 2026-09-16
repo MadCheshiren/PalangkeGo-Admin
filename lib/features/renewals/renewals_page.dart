@@ -23,6 +23,7 @@ class _RenewalsPageState extends ConsumerState<RenewalsPage> {
   final tableScrollController = ScrollController();
   String status = 'All Statuses';
   String stallCategory = 'All Categories';
+  bool history = false;
   int page = 0;
   late Set<String> _viewedRenewalIds;
 
@@ -94,7 +95,10 @@ class _RenewalsPageState extends ConsumerState<RenewalsPage> {
                       .contains(search.text.trim().toLowerCase())) &&
               (status == 'All Statuses' || _status(v.status) == status) &&
               (stallCategory == 'All Categories' ||
-                  v.category == stallCategory),
+                  v.category == stallCategory) &&
+              (!history ||
+                  v.status == RenewalStatus.approved ||
+                  v.status == RenewalStatus.expired),
         )
         .toList()
       ..sort((a, b) {
@@ -188,7 +192,17 @@ class _RenewalsPageState extends ConsumerState<RenewalsPage> {
             36,
           ),
           child: DataPanel(
-            title: 'Renewal',
+            title: history ? 'Renewal History' : 'Renewal Requests',
+            headerAction: _RenewalViewToggle(
+              history: history,
+              onChanged: (value) {
+                setState(() {
+                  history = value;
+                  status = 'All Statuses';
+                });
+                _resetTable();
+              },
+            ),
             child: Column(
               children: [
                 Toolbar(
@@ -198,18 +212,29 @@ class _RenewalsPageState extends ConsumerState<RenewalsPage> {
                     search.clear();
                     status = 'All Statuses';
                     stallCategory = 'All Categories';
+                    history = false;
                     _resetTable();
                   },
                   trailing: [
-                    _filter(status, [
-                      'All Statuses',
-                      'Approved',
-                      'Reviewing',
-                      'Expired',
-                    ], (v) {
-                      status = v;
-                      _resetTable();
-                    }),
+                    _filter(
+                      status,
+                      history
+                          ? [
+                              'All Statuses',
+                              'Approved',
+                              'Expired',
+                            ]
+                          : [
+                              'All Statuses',
+                              'Approved',
+                              'Reviewing',
+                              'Expired',
+                            ],
+                      (v) {
+                        status = v;
+                        _resetTable();
+                      },
+                    ),
                     _filter(
                         stallCategory == 'All Categories'
                             ? 'Stall Category'
@@ -414,7 +439,11 @@ class _Table extends StatelessWidget {
           ),
           DataCell(
             StatusBadge(
-              label: v.status.toString().split('.').last,
+              label: switch (v.status) {
+                RenewalStatus.reviewing => 'Under Review',
+                RenewalStatus.approved => 'Verified',
+                RenewalStatus.expired => 'Expired',
+              },
               kind: v.status == RenewalStatus.approved
                   ? BadgeKind.success
                   : v.status == RenewalStatus.reviewing
@@ -431,23 +460,23 @@ class _Table extends StatelessWidget {
 
     return ScrollableDataTable(
       verticalController: verticalController,
-      minWidth: 1350,
+      minWidth: 1500,
       columnSpacing: 18,
       columns: const [
         DataColumn(
-          columnWidth: FlexColumnWidth(1.15),
+          columnWidth: FlexColumnWidth(1.25),
           label: Text('APPLICATION ID'),
         ),
         DataColumn(
-          columnWidth: FlexColumnWidth(1.35),
+          columnWidth: FlexColumnWidth(1.25),
           label: Text('APPLICANT'),
         ),
         DataColumn(
-          columnWidth: FlexColumnWidth(1.5),
+          columnWidth: FlexColumnWidth(1.35),
           label: Text('STALL NAME'),
         ),
         DataColumn(
-          columnWidth: FlexColumnWidth(.9),
+          columnWidth: FlexColumnWidth(0.95),
           label: Text('CATEGORY'),
         ),
         DataColumn(
@@ -455,15 +484,87 @@ class _Table extends StatelessWidget {
           label: Text('EXPIRY DATE'),
         ),
         DataColumn(
-          columnWidth: FlexColumnWidth(1.2),
-          label: Text('KYC STATUS'),
+          columnWidth: FlexColumnWidth(1.75),
+          label: Text('VERIFICATION STATUS'),
         ),
         DataColumn(
-          columnWidth: FlexColumnWidth(.7),
+          columnWidth: FlexColumnWidth(0.8),
           label: Text('ACTIONS'),
         ),
       ],
       rows: rows,
+    );
+  }
+}
+
+class _RenewalViewToggle extends StatelessWidget {
+  const _RenewalViewToggle({required this.history, required this.onChanged});
+
+  final bool history;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = semanticColors(context);
+    return SegmentedButton<bool>(
+      style: ButtonStyle(
+        backgroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const Color(0xFFD1FAE5);
+          }
+          if (states.contains(WidgetState.hovered)) {
+            return colors.hoverSurface;
+          }
+          return colors.cardBackground;
+        }),
+        foregroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const Color(0xFF065F46);
+          }
+          return colors.secondaryText;
+        }),
+        textStyle: WidgetStateProperty.resolveWith((states) {
+          final isSelected = states.contains(WidgetState.selected);
+          return TextStyle(
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+          );
+        }),
+        iconColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const Color(0xFF065F46);
+          }
+          return colors.secondaryText;
+        }),
+        side: WidgetStatePropertyAll(
+          BorderSide(color: colors.subtleBorder),
+        ),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+        ),
+        padding: const WidgetStatePropertyAll(
+          EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        ),
+        elevation: const WidgetStatePropertyAll(0),
+        mouseCursor: const WidgetStatePropertyAll(SystemMouseCursors.click),
+      ),
+      segments: const [
+        ButtonSegment<bool>(
+          value: false,
+          label: Text('Requests'),
+          icon: Icon(Icons.assignment_outlined, size: 15),
+        ),
+        ButtonSegment<bool>(
+          value: true,
+          label: Text('Renewal History'),
+          icon: Icon(Icons.history_rounded, size: 15),
+        ),
+      ],
+      selected: {history},
+      showSelectedIcon: false,
+      onSelectionChanged: (selection) => onChanged(selection.first),
     );
   }
 }
