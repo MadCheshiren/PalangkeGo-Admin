@@ -139,12 +139,6 @@ class _AnnouncementHistoryPageState
               accent: const Color(0xFF3B82F6),
             ),
             MetricCardData(
-              value: '$totalReach',
-              label: 'Total Audience Reach',
-              icon: Icons.people_outline_rounded,
-              accent: const Color(0xFF8B5CF6),
-            ),
-            MetricCardData(
               value: '$draftOrQueuedCount',
               label: 'Drafts & Queued',
               icon: Icons.edit_note_rounded,
@@ -229,6 +223,23 @@ class _AnnouncementHistoryPageState
                         _resetPagination();
                       },
                     ),
+                    OutlinedButton.icon(
+                      onPressed: () => setState(() {
+                        search.clear();
+                        selectedAudience = 'All Audiences';
+                        selectedStatus = 'All Statuses';
+                        selectedSort = 'Newest First';
+                        _resetPagination();
+                      }),
+                      icon: const Icon(Icons.tune_rounded, size: 14),
+                      label: const Text(
+                        'Clear Filters',
+                        style: TextStyle(fontSize: 11.5),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                    ),
                   ],
                 ),
                 ScrollableDataTable(
@@ -237,7 +248,7 @@ class _AnnouncementHistoryPageState
                     DataColumn(label: Text('ANNOUNCEMENT')),
                     DataColumn(label: Text('AUDIENCE')),
                     DataColumn(label: Text('CHANNEL')),
-                    DataColumn(label: Text('REACH')),
+                    DataColumn(label: Text('DURATION')),
                     DataColumn(label: Text('STATUS')),
                     DataColumn(label: Text('ACTIONS')),
                   ],
@@ -335,28 +346,15 @@ class _AnnouncementHistoryPageState
                                 ],
                               ),
                             ),
-                            // Reach
+                            // Duration
                             DataCell(
-                              item.isDraft || item.state == 'Draft'
-                                  ? Text('—', style: TextStyle(color: colors.mutedText))
-                                  : Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(
-                                          Icons.check_circle_rounded,
-                                          size: 13,
-                                          color: Color(0xFF10B981),
-                                        ),
-                                        const SizedBox(width: 5),
-                                        Text(
-                                          '${item.deliveredCount} / ${item.recipientCount}',
-                                          style: const TextStyle(
-                                            fontSize: 11.5,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                              Text(
+                                formatAnnouncementDuration(
+                                  item.createdAt,
+                                  item.expiresAt,
+                                ),
+                                style: const TextStyle(fontSize: 11.5),
+                              ),
                             ),
                             // Status
                             DataCell(
@@ -386,13 +384,6 @@ class _AnnouncementHistoryPageState
                                     tooltip: 'Edit Announcement',
                                     icon: Icons.edit_outlined,
                                     onPressed: () => _editAnnouncement(item),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  TableActionIconButton(
-                                    tooltip: 'Duplicate as New',
-                                    icon: Icons.copy_rounded,
-                                    onPressed: () =>
-                                        _duplicateAnnouncement(item),
                                   ),
                                   const SizedBox(width: 4),
                                   TableActionIconButton(
@@ -438,15 +429,12 @@ class _AnnouncementHistoryPageState
       (dialogCtx) => _AnnouncementDetailDialog(
         announcement: item,
         onEdit: () => Navigator.of(dialogCtx).pop('edit'),
-        onDuplicate: () => Navigator.of(dialogCtx).pop('duplicate'),
         onDelete: () => Navigator.of(dialogCtx).pop('delete'),
       ),
     );
     if (!mounted || action == null) return;
     if (action == 'edit') {
       _editAnnouncement(item);
-    } else if (action == 'duplicate') {
-      _duplicateAnnouncement(item);
     } else if (action == 'delete') {
       _confirmDelete(item);
     }
@@ -457,18 +445,6 @@ class _AnnouncementHistoryPageState
       context,
       (_) => AnnouncementDialog(
         announcementToEdit: item,
-      ),
-    );
-  }
-
-  void _duplicateAnnouncement(Announcement item) {
-    showBlurredDialog(
-      context,
-      (_) => AnnouncementDialog(
-        initialTitle: '${item.title} (Copy)',
-        initialBody: item.summary,
-        initialAudience: item.audience,
-        initialNotify: item.notificationType.contains('Push'),
       ),
     );
   }
@@ -539,13 +515,11 @@ class _AnnouncementDetailDialog extends StatelessWidget {
   const _AnnouncementDetailDialog({
     required this.announcement,
     required this.onEdit,
-    required this.onDuplicate,
     required this.onDelete,
   });
 
   final Announcement announcement;
   final VoidCallback onEdit;
-  final VoidCallback onDuplicate;
   final VoidCallback onDelete;
 
   @override
@@ -668,6 +642,11 @@ class _AnnouncementDetailDialog extends StatelessWidget {
                             errorBuilder: (_, __, ___) => Image.network(
                               announcement.imageUrl!,
                               fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Icon(
+                                Icons.campaign_outlined,
+                                size: 48,
+                                color: colors.accent,
+                              ),
                             ),
                           ),
                   ),
@@ -693,17 +672,6 @@ class _AnnouncementDetailDialog extends StatelessWidget {
                       icon: Icons.notifications_none_rounded,
                       label: 'Notification Channel',
                       value: announcement.notificationType,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _metaCard(
-                      context,
-                      icon: Icons.check_circle_outline_rounded,
-                      label: 'Delivery Reach',
-                      value: isDraft
-                          ? 'Not sent (Draft)'
-                          : '${announcement.deliveredCount} of ${announcement.recipientCount}',
                     ),
                   ),
                 ],
@@ -753,12 +721,6 @@ class _AnnouncementDetailDialog extends StatelessWidget {
                     onPressed: onEdit,
                     icon: const Icon(Icons.edit_outlined, size: 15),
                     label: const Text('Edit'),
-                  ),
-                  const SizedBox(width: 10),
-                  OutlinedButton.icon(
-                    onPressed: onDuplicate,
-                    icon: const Icon(Icons.copy_rounded, size: 15),
-                    label: const Text('Duplicate as New'),
                   ),
                   const SizedBox(width: 10),
                   FilledButton(
@@ -817,4 +779,16 @@ class _AnnouncementDetailDialog extends StatelessWidget {
       ),
     );
   }
+}
+
+String formatAnnouncementDuration(DateTime createdAt, DateTime? expiresAt) {
+  if (expiresAt == null) return 'Permanent';
+  final diff = expiresAt.difference(createdAt);
+  final days = diff.inDays;
+  if (days <= 1) return '1 Day';
+  if (days <= 3) return '3 Days';
+  if (days <= 7) return '7 Days';
+  if (days <= 14) return '14 Days';
+  if (days <= 30) return '30 Days';
+  return '$days Days';
 }

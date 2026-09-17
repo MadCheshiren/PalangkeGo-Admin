@@ -80,6 +80,11 @@ class AppLogo extends StatelessWidget {
       height: compact ? 44 : 64,
       fit: BoxFit.contain,
       semanticLabel: 'PalengkeGo Market Basket',
+      errorBuilder: (context, error, stackTrace) => Icon(
+        Icons.shopping_basket_rounded,
+        size: compact ? 36 : 48,
+        color: accentColor,
+      ),
     );
 
     final titleText = Text.rich(
@@ -1702,42 +1707,62 @@ class PaginationBar extends StatelessWidget {
 }
 
 class EmptyState extends StatelessWidget {
-  const EmptyState({super.key, this.message = 'No results found'});
+  const EmptyState({
+    super.key,
+    this.message = 'No results found',
+    this.description,
+    this.icon,
+    this.action,
+  });
+
   final String message;
+  final String? description;
+  final IconData? icon;
+  final Widget? action;
+
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.all(40),
-        child: Center(
-          child: Column(
-            children: [
-              FadeSlideIn(
-                child: Icon(
-                  Icons.search_off_rounded,
-                  size: 28,
-                  color: semanticColors(context).mutedText,
-                ),
+  Widget build(BuildContext context) {
+    final colors = semanticColors(context);
+    return Padding(
+      padding: const EdgeInsets.all(40),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FadeSlideIn(
+              child: Icon(
+                icon ?? Icons.search_off_rounded,
+                size: 32,
+                color: colors.mutedText,
               ),
-              const SizedBox(height: 8),
-              Text(
-                message,
-                style: TextStyle(
-                  color: semanticColors(context).secondaryText,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              style: TextStyle(
+                color: colors.secondaryText,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
               ),
-              const SizedBox(height: 4),
-              Text(
-                'Try changing your search or filter selection.',
-                style: TextStyle(
-                  color: semanticColors(context).mutedText,
-                  fontSize: 11,
-                ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              description ?? 'Try changing your search or filter selection.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: colors.mutedText,
+                fontSize: 11.5,
               ),
+            ),
+            if (action != null) ...[
+              const SizedBox(height: 16),
+              action!,
             ],
-          ),
+          ],
         ),
-      );
+      ),
+    );
+  }
 }
 
 class SectionLabel extends StatelessWidget {

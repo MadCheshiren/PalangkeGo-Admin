@@ -103,7 +103,7 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
     }
   }
 
-  static Widget _buildFloatingDateRangePicker(
+  static Widget _buildFloatingDatePicker(
       BuildContext context, Widget? child) {
     final media = MediaQuery.of(context);
     final dialogWidth = (media.size.width * 0.9).clamp(320.0, 440.0);
@@ -127,13 +127,10 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
                       primary: const Color(0xFF10B981),
                     ),
                 datePickerTheme: DatePickerThemeData(
-                  rangePickerShape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  rangePickerElevation: 12,
+                  elevation: 12,
                 ),
               ),
               child: child!,
@@ -146,25 +143,20 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
 
   Future<void> _pickCustomDateRange() async {
     final now = DateTime.now();
-    final range = await showDateRangePicker(
+    final picked = await showDatePicker(
       context: context,
+      initialDate: startDate ?? now,
       firstDate: DateTime(2020),
       lastDate: now.add(const Duration(days: 365)),
-      initialDateRange: startDate != null && endDate != null
-          ? DateTimeRange(start: startDate!, end: endDate!)
-          : DateTimeRange(
-              start: now.subtract(const Duration(days: 7)),
-              end: now,
-            ),
       barrierColor: Colors.black.withValues(alpha: 0.45),
-      builder: _buildFloatingDateRangePicker,
+      builder: _buildFloatingDatePicker,
     );
 
-    if (range != null) {
+    if (picked != null) {
       setState(() {
         selectedPreset = DatePreset.custom;
-        startDate = range.start;
-        endDate = range.end;
+        startDate = DateTime(picked.year, picked.month, picked.day);
+        endDate = DateTime(picked.year, picked.month, picked.day, 23, 59, 59);
         page = 0;
       });
     }
@@ -1464,24 +1456,20 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
                         Expanded(
                           child: OutlinedButton.icon(
                             onPressed: () async {
-                              final range = await showDateRangePicker(
+                              final picked = await showDatePicker(
                                 context: context,
+                                initialDate: nextStart ?? DateTime.now(),
                                 firstDate: DateTime(2020),
                                 lastDate: DateTime.now()
                                     .add(const Duration(days: 365)),
-                                initialDateRange: nextStart != null &&
-                                        nextEnd != null
-                                    ? DateTimeRange(
-                                        start: nextStart!, end: nextEnd!)
-                                    : null,
                                 barrierColor:
                                     Colors.black.withValues(alpha: 0.45),
-                                builder: _buildFloatingDateRangePicker,
+                                builder: _buildFloatingDatePicker,
                               );
-                              if (range != null) {
+                              if (picked != null) {
                                 setDialogState(() {
-                                  nextStart = range.start;
-                                  nextEnd = range.end;
+                                  nextStart = DateTime(picked.year, picked.month, picked.day);
+                                  nextEnd = DateTime(picked.year, picked.month, picked.day, 23, 59, 59);
                                 });
                               }
                             },

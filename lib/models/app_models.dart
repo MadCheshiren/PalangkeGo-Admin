@@ -17,6 +17,15 @@ class KycDocument {
     required this.mimeType,
     required this.uploadedAt,
     this.assetPath,
+    this.fileSizeFormatted,
+    this.fileUrl,
+    this.isLandscape = false,
+    this.idFrontAssetPath,
+    this.idBackAssetPath,
+    this.idFrontUrl,
+    this.idBackUrl,
+    this.hasBackSide = false,
+    this.isBackSubmitted = true,
   });
 
   final String name;
@@ -24,6 +33,15 @@ class KycDocument {
   final String mimeType;
   final DateTime uploadedAt;
   final String? assetPath;
+  final String? fileSizeFormatted;
+  final String? fileUrl;
+  final bool isLandscape;
+  final String? idFrontAssetPath;
+  final String? idBackAssetPath;
+  final String? idFrontUrl;
+  final String? idBackUrl;
+  final bool hasBackSide;
+  final bool isBackSubmitted;
 }
 
 final _enumLabelCache = <Object, String>{};
@@ -220,6 +238,8 @@ class RenewalRequest {
     required this.status,
     required this.location,
     this.submittedAt,
+    this.rejectionReason,
+    this.documents = const [],
   });
 
   final String id;
@@ -230,10 +250,14 @@ class RenewalRequest {
   final RenewalStatus status;
   final String location;
   final DateTime? submittedAt;
+  final String? rejectionReason;
+  final List<KycDocument> documents;
 
   RenewalRequest copyWith({
     RenewalStatus? status,
     DateTime? submittedAt,
+    String? rejectionReason,
+    List<KycDocument>? documents,
   }) =>
       RenewalRequest(
         id: id,
@@ -244,6 +268,8 @@ class RenewalRequest {
         status: status ?? this.status,
         location: location,
         submittedAt: submittedAt ?? this.submittedAt,
+        rejectionReason: rejectionReason ?? this.rejectionReason,
+        documents: documents ?? this.documents,
       );
 }
 

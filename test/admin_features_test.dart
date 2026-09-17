@@ -318,4 +318,79 @@ void main() {
       isEmpty,
     );
   });
+
+  test('renewal requests filtering, badge equality, mutual exclusivity, and sorting',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
+    final controller = AppDataController(preferences, firebaseEnabled: false);
+    final renewals = controller.state.renewals;
+
+    final requestsTabItems = renewals
+        .where((r) => r.status == RenewalStatus.reviewing)
+        .toList();
+    final historyTabItems = renewals
+        .where((r) => r.status != RenewalStatus.reviewing)
+        .toList();
+
+    // Requests tab only contains pending Under Review renewals
+    expect(
+      requestsTabItems.every((r) => r.status == RenewalStatus.reviewing),
+      isTrue,
+    );
+
+    // Renewal History tab contains only non-pending states (approved, expired)
+    expect(
+      historyTabItems.every((r) => r.status != RenewalStatus.reviewing),
+      isTrue,
+    );
+
+    // Badge counts equal filter row counts
+    expect(requestsTabItems.length, 6);
+    expect(historyTabItems.length, 19);
+    expect(requestsTabItems.length + historyTabItems.length, renewals.length);
+
+    // Mutual exclusivity: no renewal ID appears in both tabs
+    final requestsIds = requestsTabItems.map((r) => r.id).toSet();
+    final historyIds = historyTabItems.map((r) => r.id).toSet();
+    expect(requestsIds.intersection(historyIds), isEmpty);
+
+    // Default sorting for Requests tab: soonest expiry date first
+    final sortedRequests = List<RenewalRequest>.from(requestsTabItems)
+      ..sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
+    for (int i = 0; i < sortedRequests.length - 1; i++) {
+      expect(
+        sortedRequests[i].expiryDate.isBefore(sortedRequests[i + 1].expiryDate) ||
+            sortedRequests[i].expiryDate.isAtSameMomentAs(sortedRequests[i + 1].expiryDate),
+        isTrue,
+      );
+    }
+
+    // State change: approving a renewal moves it from Requests tab to Renewal History tab
+    final pendingRenewal = requestsTabItems.first;
+    await controller.updateRenewal(pendingRenewal.id, RenewalStatus.approved);
+
+    final updatedRenewals = controller.state.renewals;
+    final newRequestsTab = updatedRenewals
+        .where((r) => r.status == RenewalStatus.reviewing)
+        .toList();
+    final newHistoryTab = updatedRenewals
+        .where((r) => r.status != RenewalStatus.reviewing)
+        .toList();
+
+    expect(newRequestsTab.map((r) => r.id), isNot(contains(pendingRenewal.id)));
+    expect(newHistoryTab.map((r) => r.id), contains(pendingRenewal.id));
+    expect(newRequestsTab.length, 5);
+    expect(newHistoryTab.length, 20);
+
+    // State change: reopening a renewal moves it from Renewal History tab back to Requests tab
+    await controller.updateRenewal(pendingRenewal.id, RenewalStatus.reviewing);
+
+    final reopenedRenewals = controller.state.renewals;
+    final reopenedRequestsTab = reopenedRenewals
+        .where((r) => r.status == RenewalStatus.reviewing)
+        .toList();
+    expect(reopenedRequestsTab.map((r) => r.id), contains(pendingRenewal.id));
+    expect(reopenedRequestsTab.length, 6);
+  });
 }

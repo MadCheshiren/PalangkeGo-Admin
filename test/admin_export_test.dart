@@ -277,7 +277,7 @@ void main() {
       expect(doc.summary.items.any((item) => item.label == 'Resolved'), isTrue);
     });
 
-    test('AnnouncementExportData computes reach and status values', () {
+    test('AnnouncementExportData computes metrics and status values', () {
       final allAnnouncements = seedAnnouncements();
       final doc = AnnouncementExportData.build(
         allAnnouncements: allAnnouncements,

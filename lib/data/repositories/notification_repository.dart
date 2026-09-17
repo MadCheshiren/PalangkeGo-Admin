@@ -20,6 +20,26 @@ class NotificationController extends StateNotifier<List<AdminNotification>> {
 
   int get unreadCount => state.where((item) => !item.isRead).length;
 
+  void addNotification({
+    required String title,
+    required String message,
+    required NotificationType type,
+    String? route,
+    String? actionLabel,
+  }) {
+    final item = AdminNotification(
+      id: 'notif-${DateTime.now().millisecondsSinceEpoch}',
+      title: title,
+      message: message,
+      type: type,
+      createdAt: DateTime.now(),
+      isRead: false,
+      route: route,
+      actionLabel: actionLabel,
+    );
+    state = [item, ...state];
+  }
+
   Future<void> markRead(String id) async {
     state = [
       for (final item in state)

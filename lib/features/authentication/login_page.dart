@@ -54,7 +54,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     for (final path in _loginSlides) {
-      precacheImage(AssetImage(path), context);
+      precacheImage(AssetImage(path), context).catchError((_) {});
     }
   }
 
@@ -794,6 +794,9 @@ class _LoginSlideshowState extends State<_LoginSlideshow> {
         fit: BoxFit.cover,
         alignment: Alignment.center,
         gaplessPlayback: true,
+        errorBuilder: (context, error, stackTrace) => Container(
+          color: const Color(0xFF0F4A3C),
+        ),
       ),
     );
   }
@@ -1234,6 +1237,11 @@ class _Footer extends StatelessWidget {
                     height: 22,
                     fit: BoxFit.cover,
                     semanticLabel: 'City of Naga official seal',
+                    errorBuilder: (context, error, stackTrace) => Icon(
+                      Icons.verified_rounded,
+                      size: 22,
+                      color: colors.accent,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),

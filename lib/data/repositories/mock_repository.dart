@@ -309,6 +309,35 @@ class AppDataController extends StateNotifier<AppDataState> {
         .where((item) => item.isActive)
         .map((item) => item.accountId)
         .toSet();
+    var restoredApplications =
+        state.applications.map(_restoreApplication).toList();
+    if (restoredApplications
+        .where((item) => item.status == ApplicationStatus.reviewing)
+        .isEmpty) {
+      final keys = _preferences
+          .getKeys()
+          .where((k) => k.startsWith('application_state_'))
+          .toList();
+      for (final k in keys) {
+        await _preferences.remove(k);
+      }
+      restoredApplications = seedApplications();
+    }
+
+    var restoredRenewals = state.renewals.map(_restoreRenewal).toList();
+    if (restoredRenewals
+        .where((item) => item.status == RenewalStatus.reviewing)
+        .isEmpty) {
+      final keys = _preferences
+          .getKeys()
+          .where((k) => k.startsWith('renewal_state_'))
+          .toList();
+      for (final k in keys) {
+        await _preferences.remove(k);
+      }
+      restoredRenewals = seedRenewals();
+    }
+
     state = state.copyWith(
       vendors: state.vendors
           .map(
@@ -349,8 +378,8 @@ class AppDataController extends StateNotifier<AppDataState> {
                         : customer,
           )
           .toList(),
-      applications: state.applications.map(_restoreApplication).toList(),
-      renewals: state.renewals.map(_restoreRenewal).toList(),
+      applications: restoredApplications,
+      renewals: restoredRenewals,
       reports: state.reports.map(_restoreReport).toList(),
       auditLogs: effectiveAudits,
       suspensions: effectiveSuspensions,
@@ -597,12 +626,18 @@ class AppDataController extends StateNotifier<AppDataState> {
     );
   }
 
-  Future<void> updateRenewal(String id, RenewalStatus status) async {
+  Future<void> updateRenewal(
+    String id,
+    RenewalStatus status, {
+    String? rejectionReason,
+  }) async {
     if (firebaseEnabled) {
       final error = status == RenewalStatus.approved
           ? await FirebaseAdminService.instance.approveRenewal(id)
           : await FirebaseAdminService.instance.rejectRenewal(
-              id, 'Renewal did not pass review.');
+              id,
+              rejectionReason ?? 'Renewal did not pass review.',
+            );
       if (error != null) {
         debugPrint('[admin] approveRenewal failed: $error');
       }
@@ -613,7 +648,14 @@ class AppDataController extends StateNotifier<AppDataState> {
     final current = _firstOrNull(state.renewals.where((item) => item.id == id));
     state = state.copyWith(
       renewals: state.renewals
-          .map((item) => item.id == id ? item.copyWith(status: status) : item)
+          .map(
+            (item) => item.id == id
+                ? item.copyWith(
+                    status: status,
+                    rejectionReason: rejectionReason,
+                  )
+                : item,
+          )
           .toList(),
     );
     final updated = _firstOrNull(state.renewals.where((item) => item.id == id));
@@ -625,6 +667,7 @@ class AppDataController extends StateNotifier<AppDataState> {
       targetUserName: id,
       previousValue: enumLabel(current?.status ?? RenewalStatus.reviewing),
       newValue: enumLabel(status),
+      reason: rejectionReason ?? '',
     );
   }
 
@@ -1304,6 +1347,28 @@ class AppDataController extends StateNotifier<AppDataState> {
     } catch (_) {
       return application;
     }
+  }
+
+  Future<void> resetMockRenewals() async {
+    final keys = _preferences
+        .getKeys()
+        .where((k) => k.startsWith('renewal_state_'))
+        .toList();
+    for (final key in keys) {
+      await _preferences.remove(key);
+    }
+    state = state.copyWith(renewals: seedRenewals());
+  }
+
+  Future<void> resetMockApplications() async {
+    final keys = _preferences
+        .getKeys()
+        .where((k) => k.startsWith('application_state_'))
+        .toList();
+    for (final key in keys) {
+      await _preferences.remove(key);
+    }
+    state = state.copyWith(applications: seedApplications());
   }
 
   Future<void> _persistRenewal(RenewalRequest renewal) =>

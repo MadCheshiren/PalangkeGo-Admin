@@ -8,6 +8,7 @@ import '../../core/widgets/admin_shell.dart';
 import '../../core/widgets/admin_widgets.dart';
 import '../../data/repositories/mock_repository.dart';
 import '../../models/app_models.dart';
+import 'application_utils.dart';
 import 'verification_dialog.dart';
 
 class VendorApplicationsPage extends ConsumerStatefulWidget {
@@ -24,6 +25,8 @@ class _VendorApplicationsPageState
   final tableScrollController = ScrollController();
   String status = 'All Statuses';
   String stallCategory = 'All Categories';
+  bool history = false;
+  bool _userSelectedTab = false;
   int page = 0;
   late Set<String> _viewedApplicationIds;
 
@@ -75,9 +78,38 @@ class _VendorApplicationsPageState
     });
   }
 
+  DateTime _getEffectiveToday(List<VendorApplication> applications) {
+    final now = DateTime.now();
+    final hasToday = applications.any((item) => isSameCalendarDay(item.submittedAt, now));
+    if (hasToday || applications.isEmpty) {
+      return now;
+    }
+    return applications
+        .map((a) => a.submittedAt)
+        .reduce((a, b) => a.isAfter(b) ? a : b);
+  }
+
   @override
   Widget build(BuildContext context) {
     final data = ref.watch(appDataProvider);
+    final pendingCount = data.applications
+        .where((item) => item.status == ApplicationStatus.reviewing)
+        .length;
+    final approvedCount = data.applications
+        .where((item) => item.status == ApplicationStatus.verified)
+        .length;
+    final invalidDocsCount = data.applications
+        .where((item) => item.status == ApplicationStatus.invalidDocs)
+        .length;
+    final rejectedCount = data.applications
+        .where((item) => item.status == ApplicationStatus.rejected)
+        .length;
+    final historyCount = data.applications.length - pendingCount;
+
+    if (!_userSelectedTab && pendingCount == 0 && historyCount > 0) {
+      history = true;
+    }
+
     final categories = <String>{
       'All Categories',
       ...data.applications.map((item) => item.category),
@@ -86,6 +118,16 @@ class _VendorApplicationsPageState
     categories
       ..remove('All Categories')
       ..insert(0, 'All Categories');
+
+    final effectiveToday = _getEffectiveToday(data.applications);
+    final newApplications = data.applications
+        .where((item) => isApplicationNew(item, _viewedApplicationIds, effectiveToday))
+        .toList();
+    final newApplicationIds = newApplications.map((item) => item.id).toSet();
+    final newTodayCount = newApplications.length;
+    final newTodayFormatted =
+        newTodayCount < 10 ? '0$newTodayCount' : '$newTodayCount';
+
     final values = data.applications
         .where(
           (item) =>
@@ -94,79 +136,74 @@ class _VendorApplicationsPageState
                       .toLowerCase()
                       .contains(search.text.trim().toLowerCase())) &&
               (status == 'All Statuses' ||
-                  item.status.toString().split('.').last ==
-                      status.toLowerCase().replaceAll(' ', '')) &&
+                  ((status == 'Re-Upload Requested' || status == 'Invalid Docs')
+                      ? item.status == ApplicationStatus.invalidDocs
+                      : item.status.toString().split('.').last ==
+                          status.toLowerCase().replaceAll(' ', ''))) &&
               (stallCategory == 'All Categories' ||
-                  item.category == stallCategory),
+                  item.category == stallCategory) &&
+              (!history
+                  ? item.status == ApplicationStatus.reviewing
+                  : item.status != ApplicationStatus.reviewing),
         )
         .toList()
       ..sort((a, b) {
-        final aCompleted = a.status == ApplicationStatus.verified ||
-            a.status == ApplicationStatus.rejected ||
-            a.status == ApplicationStatus.invalidDocs;
-        final bCompleted = b.status == ApplicationStatus.verified ||
-            b.status == ApplicationStatus.rejected ||
-            b.status == ApplicationStatus.invalidDocs;
-        if (aCompleted != bCompleted) {
-          return aCompleted ? 1 : -1;
+        final aIsNew = newApplicationIds.contains(a.id);
+        final bIsNew = newApplicationIds.contains(b.id);
+        if (aIsNew != bIsNew) {
+          return aIsNew ? -1 : 1;
         }
         return b.submittedAt.compareTo(a.submittedAt);
       });
-    final now = DateTime.now();
-    final todayApplications = data.applications.where(
-      (item) =>
-          item.submittedAt.year == now.year &&
-          item.submittedAt.month == now.month &&
-          item.submittedAt.day == now.day,
-    );
-    final todayReviewing = todayApplications.where(
-      (item) => item.status == ApplicationStatus.reviewing,
-    );
-    final Set<String> newApplicationIds;
-    if (todayReviewing.isNotEmpty) {
-      newApplicationIds = todayReviewing
-          .map((item) => item.id)
-          .where((id) => !_viewedApplicationIds.contains(id))
-          .toSet();
-    } else {
-      final newestApplicationId = _newestId(data.applications);
-      newApplicationIds = newestApplicationId != null &&
-              !_viewedApplicationIds.contains(newestApplicationId)
-          ? {newestApplicationId}
-          : <String>{};
-    }
+
     final int totalPages = (values.length / 10).ceil();
     final int safePage = totalPages == 0 ? 0 : page.clamp(0, totalPages - 1);
 
-    final pendingCount = data.applications
-        .where((item) => item.status == ApplicationStatus.reviewing)
-        .length;
-    final approvedCount = data.applications
-        .where((item) => item.status == ApplicationStatus.verified)
-        .length;
-    final rejectedCount = data.applications
-        .where((item) =>
-            item.status == ApplicationStatus.rejected ||
-            item.status == ApplicationStatus.invalidDocs)
-        .length;
+    final hasActiveFilters = search.text.trim().isNotEmpty ||
+        status != 'All Statuses' ||
+        stallCategory != 'All Categories';
 
-    final int newTodayCount;
-    if (todayApplications.isNotEmpty) {
-      newTodayCount = todayApplications.length;
-    } else if (data.applications.isNotEmpty) {
-      final latestDate = data.applications
-          .map((a) => a.submittedAt)
-          .reduce((a, b) => a.isAfter(b) ? a : b);
-      newTodayCount = data.applications.where((item) {
-        return item.submittedAt.year == latestDate.year &&
-            item.submittedAt.month == latestDate.month &&
-            item.submittedAt.day == latestDate.day;
-      }).length;
+    final Widget emptyStateWidget;
+    if (hasActiveFilters) {
+      emptyStateWidget = const EmptyState(
+        message: 'No results found',
+        description: 'Try changing your search or filter selection.',
+        icon: Icons.search_off_rounded,
+      );
+    } else if (!history) {
+      emptyStateWidget = EmptyState(
+        message: 'No pending applications',
+        description:
+            'All applications have been processed. Check Application History for past records.',
+        icon: Icons.task_alt_rounded,
+        action: OutlinedButton.icon(
+          onPressed: () {
+            setState(() {
+              history = true;
+              _userSelectedTab = true;
+              status = 'All Statuses';
+            });
+            _resetTable();
+          },
+          icon: const Icon(Icons.history_rounded, size: 16),
+          label: const Text('View Application History'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: semanticColors(context).accent,
+            side: BorderSide(color: semanticColors(context).accent),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        ),
+      );
     } else {
-      newTodayCount = 0;
+      emptyStateWidget = const EmptyState(
+        message: 'No application history found',
+        description: 'No processed stall holder applications recorded yet.',
+        icon: Icons.history_rounded,
+      );
     }
-    final newTodayFormatted =
-        newTodayCount < 10 ? '0$newTodayCount' : '$newTodayCount';
 
     return ListView(
       padding: EdgeInsets.zero,
@@ -177,28 +214,88 @@ class _VendorApplicationsPageState
               'Review and verify new stall holder applications before granting access to the marketplace.',
           metrics: [
             MetricCardData(
+              value: '${data.applications.length}',
+              label: 'Total Applications',
+              icon: Icons.assignment_outlined,
+              accent: const Color(0xFF10B981),
+              onTap: () {
+                setState(() {
+                  history = false;
+                  _userSelectedTab = true;
+                  status = 'All Statuses';
+                });
+                _resetTable();
+              },
+            ),
+            MetricCardData(
               value: '$pendingCount',
               label: 'Pending Application',
               icon: Icons.assignment_outlined,
               accent: const Color(0xFFF59E0B),
+              onTap: () {
+                setState(() {
+                  history = false;
+                  _userSelectedTab = true;
+                  status = 'Reviewing';
+                });
+                _resetTable();
+              },
             ),
             MetricCardData(
               value: '$approvedCount',
               label: 'Approved Application',
               icon: Icons.verified_outlined,
               accent: const Color(0xFF10B981),
+              onTap: () {
+                setState(() {
+                  history = true;
+                  _userSelectedTab = true;
+                  status = 'Verified';
+                });
+                _resetTable();
+              },
+            ),
+            MetricCardData(
+              value: '$invalidDocsCount',
+              label: 'Re-Upload Requested',
+              icon: Icons.document_scanner_outlined,
+              accent: const Color(0xFFD97706),
+              onTap: () {
+                setState(() {
+                  history = true;
+                  _userSelectedTab = true;
+                  status = 'Re-Upload Requested';
+                });
+                _resetTable();
+              },
             ),
             MetricCardData(
               value: '$rejectedCount',
               label: 'Rejected',
               icon: Icons.cancel_outlined,
               accent: const Color(0xFFEF4444),
+              onTap: () {
+                setState(() {
+                  history = true;
+                  _userSelectedTab = true;
+                  status = 'Rejected';
+                });
+                _resetTable();
+              },
             ),
             MetricCardData(
               value: newTodayFormatted,
               label: 'New Today',
               icon: Icons.today_outlined,
               accent: const Color(0xFF3B82F6),
+              onTap: () {
+                setState(() {
+                  history = false;
+                  _userSelectedTab = true;
+                  status = 'All Statuses';
+                });
+                _resetTable();
+              },
             ),
           ],
         ),
@@ -210,7 +307,20 @@ class _VendorApplicationsPageState
             36,
           ),
           child: DataPanel(
-            title: 'Recent Applications',
+            title: history ? 'Application History' : 'Recent Applications',
+            headerAction: _ApplicationViewToggle(
+              history: history,
+              requestsCount: pendingCount,
+              historyCount: historyCount,
+              onChanged: (value) {
+                setState(() {
+                  history = value;
+                  _userSelectedTab = true;
+                  status = 'All Statuses';
+                });
+                _resetTable();
+              },
+            ),
             child: Column(
               children: [
                 Toolbar(
@@ -220,19 +330,28 @@ class _VendorApplicationsPageState
                     search.clear();
                     status = 'All Statuses';
                     stallCategory = 'All Categories';
+                    history = false;
                     _resetTable();
                   },
                   trailing: [
-                    _filter(status, [
-                      'All Statuses',
-                      'Verified',
-                      'Reviewing',
-                      'Invalid Docs',
-                      'Rejected',
-                    ], (value) {
-                      status = value;
-                      _resetTable();
-                    }),
+                    _filter(
+                      status,
+                      history
+                          ? [
+                              'All Statuses',
+                              'Verified',
+                              'Re-Upload Requested',
+                              'Rejected',
+                            ]
+                          : [
+                              'All Statuses',
+                              'Reviewing',
+                            ],
+                      (value) {
+                        status = value;
+                        _resetTable();
+                      },
+                    ),
                     _filter(
                         stallCategory == 'All Categories'
                             ? 'Stall Category'
@@ -256,9 +375,11 @@ class _VendorApplicationsPageState
                   ],
                 ),
                 _ApplicationTable(
+                  history: history,
                   values: values.skip(safePage * 10).take(10).toList(),
                   newApplicationIds: newApplicationIds,
                   verticalController: tableScrollController,
+                  emptyState: emptyStateWidget,
                   onOpen: (item) {
                     _markApplicationViewed(item.id);
                     showBlurredDialog(
@@ -321,38 +442,112 @@ class _VendorApplicationsPageState
       format: format,
     );
   }
+}
 
-  String? _newestId(List<VendorApplication> values) {
-    final pending = values
-        .where((item) => item.status == ApplicationStatus.reviewing)
-        .toList();
-    if (pending.isEmpty) return null;
-    var newest = pending.first;
-    for (final item in pending.skip(1)) {
-      if (item.submittedAt.isAfter(newest.submittedAt)) newest = item;
-    }
-    return newest.id;
+class _ApplicationViewToggle extends StatelessWidget {
+  const _ApplicationViewToggle({
+    required this.history,
+    required this.requestsCount,
+    required this.historyCount,
+    required this.onChanged,
+  });
+
+  final bool history;
+  final int requestsCount;
+  final int historyCount;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = semanticColors(context);
+    return SegmentedButton<bool>(
+      style: ButtonStyle(
+        backgroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const Color(0xFFD1FAE5);
+          }
+          if (states.contains(WidgetState.hovered)) {
+            return colors.hoverSurface;
+          }
+          return colors.cardBackground;
+        }),
+        foregroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const Color(0xFF065F46);
+          }
+          return colors.secondaryText;
+        }),
+        textStyle: WidgetStateProperty.resolveWith((states) {
+          final isSelected = states.contains(WidgetState.selected);
+          return TextStyle(
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+          );
+        }),
+        iconColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const Color(0xFF065F46);
+          }
+          return colors.secondaryText;
+        }),
+        side: WidgetStatePropertyAll(
+          BorderSide(color: colors.subtleBorder),
+        ),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+        ),
+        padding: const WidgetStatePropertyAll(
+          EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        ),
+        elevation: const WidgetStatePropertyAll(0),
+        mouseCursor: const WidgetStatePropertyAll(SystemMouseCursors.click),
+      ),
+      segments: [
+        ButtonSegment<bool>(
+          value: false,
+          label: Text('Pending Review ($requestsCount)'),
+          icon: const Icon(Icons.assignment_outlined, size: 15),
+        ),
+        ButtonSegment<bool>(
+          value: true,
+          label: Text('Application History ($historyCount)'),
+          icon: const Icon(Icons.history_rounded, size: 15),
+        ),
+      ],
+      selected: {history},
+      showSelectedIcon: false,
+      onSelectionChanged: (selection) => onChanged(selection.first),
+    );
   }
 }
 
 class _ApplicationTable extends StatelessWidget {
   const _ApplicationTable({
+    required this.history,
     required this.values,
     required this.newApplicationIds,
     required this.verticalController,
     required this.onOpen,
+    required this.emptyState,
   });
+  final bool history;
   final List<VendorApplication> values;
   final Set<String> newApplicationIds;
   final ScrollController verticalController;
   final ValueChanged<VendorApplication> onOpen;
+  final Widget emptyState;
   @override
   Widget build(BuildContext context) {
     final colors = semanticColors(context);
     final rows = values
         .map(
           (item) {
-            final isNew = newApplicationIds.contains(item.id);
+            final isResolved = item.status == ApplicationStatus.verified ||
+                item.status == ApplicationStatus.rejected ||
+                item.status == ApplicationStatus.invalidDocs;
+            final isNew = !history && !isResolved && newApplicationIds.contains(item.id);
             return DataRow(
               color: isNew
                   ? WidgetStateProperty.resolveWith<Color?>((states) {
@@ -420,6 +615,10 @@ class _ApplicationTable extends StatelessWidget {
                 ),
                 DataCell(
                   TableActionReviewButton(
+                    label: isResolved ? 'View Details' : 'Review',
+                    tooltip: isResolved
+                        ? 'View application details'
+                        : 'Review application',
                     onPressed: () => onOpen(item),
                   ),
                 ),
@@ -432,6 +631,7 @@ class _ApplicationTable extends StatelessWidget {
       verticalController: verticalController,
       minWidth: 1500,
       columnSpacing: 18,
+      emptyState: emptyState,
       columns: const [
         DataColumn(
           columnWidth: FlexColumnWidth(1.25),

@@ -199,46 +199,58 @@ List<VendorApplication> seedApplications() {
       submittedAt: DateTime(2023, 10, 24).subtract(Duration(days: index)),
       status: statuses[index % statuses.length],
       location: 'Block ${14 + index % 4} - Stall ${2 + index % 8}',
-      documents: _seedKycDocuments(
+      documents: seedKycDocuments(
           DateTime(2023, 10, 24).subtract(Duration(days: index))),
     ),
   );
 }
 
-List<KycDocument> _seedKycDocuments(DateTime uploadedAt) => [
+List<KycDocument> seedKycDocuments(DateTime uploadedAt) => [
       KycDocument(
         name: 'Mayor\'s Permit',
         filename: 'mayors-permit.pdf',
         mimeType: 'application/pdf',
         uploadedAt: uploadedAt,
+        fileSizeFormatted: '245 KB',
+        isLandscape: false,
       ),
       KycDocument(
         name: 'Sanitary Permit',
-        filename: 'sanitary-permit.png',
-        mimeType: 'image/png',
+        filename: 'sanitary-permit.pdf',
+        mimeType: 'application/pdf',
         uploadedAt: uploadedAt,
-        assetPath: 'assets/images/mobile_conversation.png',
+        fileSizeFormatted: '180 KB',
+        isLandscape: false,
       ),
       KycDocument(
         name: 'Government ID',
-        filename: 'government-id.png',
-        mimeType: 'image/png',
+        filename: 'government-id-front-back.jpg',
+        mimeType: 'image/jpeg',
         uploadedAt: uploadedAt,
         assetPath: 'assets/images/mobile_conversation.png',
+        idFrontAssetPath: 'assets/images/mobile_conversation.png',
+        idBackAssetPath: 'assets/images/mobile_conversation.png',
+        hasBackSide: true,
+        isBackSubmitted: true,
+        fileSizeFormatted: '890 KB',
+        isLandscape: true,
       ),
       KycDocument(
         name: 'Fire Certification',
-        filename: 'fire-certification.jpg',
-        mimeType: 'image/jpeg',
-        uploadedAt: uploadedAt,
-        assetPath: 'assets/images/spoiled_produce.png',
+        filename: 'fire-certification.docx',
+        mimeType:
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        uploadedAt: uploadedAt.subtract(const Duration(days: 1)),
+        fileSizeFormatted: '118 KB',
+        isLandscape: false,
       ),
       KycDocument(
         name: 'Market Clearance',
-        filename: 'market-clearance.png',
-        mimeType: 'image/png',
+        filename: 'market-clearance.pdf',
+        mimeType: 'application/pdf',
         uploadedAt: uploadedAt,
-        assetPath: 'assets/images/mobile_conversation.png',
+        fileSizeFormatted: '310 KB',
+        isLandscape: false,
       ),
     ];
 
@@ -260,21 +272,24 @@ List<RenewalRequest> seedRenewals() {
     RenewalStatus.approved,
   ];
   final now = DateTime.now();
+  final targetYear = (now.month > 1 || (now.month == 1 && now.day > 7)) ? 2027 : 2026;
+  final annualJanuaryDeadline = DateTime(targetYear, 1, 7);
+  final expiredJanuaryDeadline = DateTime(targetYear - 1, 1, 7);
+
   return List.generate(
     25,
     (index) {
       final status = statuses[index % statuses.length];
       final DateTime expiryDate = switch (status) {
-        RenewalStatus.expired =>
-          now.subtract(Duration(days: 7 + (index % 15))),
-        RenewalStatus.reviewing => now.add(
-            Duration(
-              days: (index % 8 < 4) ? (2 + (index % 5)) : (9 + (index % 7)),
-            ),
-          ),
-        RenewalStatus.approved =>
-          now.add(Duration(days: 90 + (index * 7))),
+        RenewalStatus.expired => expiredJanuaryDeadline,
+        RenewalStatus.reviewing => annualJanuaryDeadline,
+        RenewalStatus.approved => annualJanuaryDeadline,
       };
+      // Annual renewals submitted during the 1st week of January (Jan 1 - Jan 7)
+      final DateTime submittedAt = status == RenewalStatus.expired
+          ? expiredJanuaryDeadline.subtract(Duration(days: index % 5 + 1))
+          : DateTime(targetYear - 1, 12, 28).add(Duration(days: (index % 7) + 1));
+
       return RenewalRequest(
         id: '#RN-${92834 + index}',
         applicant: _applicationApplicants[index],
@@ -283,7 +298,8 @@ List<RenewalRequest> seedRenewals() {
         expiryDate: expiryDate,
         status: status,
         location: 'Block ${14 + index % 4} - Stall ${2 + index % 8}',
-        submittedAt: DateTime(2023, 10, 24).subtract(Duration(days: index)),
+        submittedAt: submittedAt,
+        documents: seedKycDocuments(submittedAt),
       );
     },
   );
@@ -307,43 +323,70 @@ List<Report> seedReports() {
     'MARITATAS',
     'SARI-SARI',
   ];
-  final statuses = [
-    ReportStatus.pending,
-    ReportStatus.underReview,
-    ReportStatus.resolved,
-  ];
   final priorities = [Priority.high, Priority.medium, Priority.low];
   return List.generate(25, (index) {
-    final type = ['Stall Holder', 'Customer', 'Application'][index % 3];
-    final accountIssue = switch (index % 3) {
-      0 => _names[index ~/ 3],
-      1 => _customers[index ~/ 3],
-      _ => '${_applicationApplicants[index ~/ 3]} Application',
-    };
+    final isStallHolder = index % 2 == 0;
+    final type = isStallHolder ? 'Stall Holder' : 'Customer';
+    final accountIssue = isStallHolder
+        ? _names[(index ~/ 2) % _names.length]
+        : _customers[(index ~/ 2) % _customers.length];
     final submittedBy = _customers[(index + 9) % _customers.length];
+    final reason = reasons[index % reasons.length];
+    final date = DateTime(2023, 10, 24).subtract(Duration(days: index));
+
+    // Ensure specific accounts used in unit tests (e.g. Diosa Fruit Stand, Juan Dela Cruz) remain active (pending/underReview)
+    final ReportStatus status = switch (index) {
+      4 || 8 || 14 || 18 || 20 || 24 => ReportStatus.resolved,
+      _ => (index % 2 == 0) ? ReportStatus.pending : ReportStatus.underReview,
+    };
+
+    final String description = switch (reason) {
+      'Scam or Fraud' => isStallHolder
+          ? 'The stall holder collected payment for premium produce but substituted lower grade items and refused a refund upon delivery.'
+          : 'The customer claimed goods were never delivered despite rider photo proof and opened a fraudulent chargeback dispute.',
+      'Harassment' => isStallHolder
+          ? 'The seller became hostile and sent aggressive messages on the chat feature after a customer inquired about late order delivery.'
+          : 'The customer submitted abusive and profane messages to the vendor staff during order inquiry.',
+      'Bug Report' =>
+          'The mobile application crashed during checkout while selecting delivery location, causing duplicated pending order charges.',
+      'Incorrect Pricing' => isStallHolder
+          ? 'Stall displayed price of ₱180/kg on app listing but charged ₱250/kg at digital payment checkout without notice.'
+          : 'Customer attempted to override listed item prices by placing invalid custom order notes.',
+      _ => isStallHolder
+          ? 'Order delivery arrived 2 hours past agreed scheduled window, resulting in spoiled perishable goods.'
+          : 'Customer repeatedly rescheduled rider pick-up times without prior notice.',
+    };
+
+    final isResolved = status == ReportStatus.resolved;
+    final decisions = ['Warning Issued', 'Account Blocked', 'Refund Approved', 'No Violation'];
+    final actions = ['Warning Issued', 'Account Blocked', 'Refund Processed', 'Dismissed'];
 
     return Report(
-      id: '#RPT-${index + 1}'.padRight(8, '0'),
+      id: '#RPT-${(index + 1) * 100}',
       type: type,
       accountIssue: accountIssue,
       category: categories[index % categories.length],
       submittedBy: submittedBy,
-      reason: reasons[index % reasons.length],
-      date: DateTime(2023, 10, 24).subtract(Duration(days: index)),
-      status: statuses[index % statuses.length],
+      reason: reason,
+      date: date,
+      status: status,
       priority: priorities[index % priorities.length],
-      description:
-          'The seller promised fresh produce but delivered spoiled goods repeatedly and refused a refund. When confronted, the stall holder became hostile and blocked my account on the messaging feature.',
+      description: description,
       reporterEmail:
           '${submittedBy.toLowerCase().replaceAll(RegExp(r'[^a-z]+'), '.')}@example.com',
       phone: '+63 917 123 ${4500 + index}',
-      vendorName: (type == 'Vendor' || type == 'Stall Holder')
+      vendorName: isStallHolder
           ? accountIssue
           : _names[(index + 10) % _names.length],
       owner: _customers[(index + 3) % _customers.length],
       stallNumber: 'Block ${12 + index}',
-      previousViolations: index % 4,
-      notes: '',
+      previousViolations: (index % 3),
+      notes: isResolved ? 'Resolved by admin officer after investigation.' : '',
+      decision: isResolved ? decisions[index % decisions.length] : null,
+      actionTaken: isResolved ? actions[index % actions.length] : null,
+      resolutionNote: isResolved ? 'Case reviewed and closed.' : null,
+      resolvedAt: isResolved ? date.add(const Duration(hours: 5)) : null,
+      resolvedBy: isResolved ? 'Administrator' : null,
     );
   });
 }

@@ -477,6 +477,61 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
     );
   }
 
+  static Widget _buildFloatingDatePicker(
+      BuildContext context, Widget? child) {
+    final media = MediaQuery.of(context);
+    final dialogWidth = (media.size.width * 0.9).clamp(320.0, 480.0);
+    final dialogHeight = (media.size.height * 0.85).clamp(420.0, 560.0);
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: dialogWidth,
+          maxHeight: dialogHeight,
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: MediaQuery(
+            data: media.copyWith(
+              size: Size(dialogWidth, dialogHeight),
+            ),
+            child: Theme(
+              data: Theme.of(context).copyWith(
+                colorScheme: Theme.of(context).colorScheme.copyWith(
+                      primary: const Color(0xFF10B981),
+                    ),
+                datePickerTheme: DatePickerThemeData(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  elevation: 12,
+                ),
+              ),
+              child: child!,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  late String selectedDuration = () {
+    final item = widget.announcementToEdit;
+    if (item != null) {
+      if (item.expiresAt == null) return 'Permanent (No Expiry)';
+      final days = item.expiresAt!.difference(item.createdAt).inDays;
+      if (days <= 1) return '1 Day';
+      if (days <= 3) return '3 Days';
+      if (days <= 7) return '7 Days';
+      if (days <= 14) return '14 Days';
+      if (days <= 30) return '30 Days';
+      return 'Custom Range (Calendar)';
+    }
+    return '7 Days';
+  }();
+
+  DateTimeRange? customDateRange;
+
   Future<void> save(bool draft) async {
     if (title.text.trim().isEmpty || body.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -492,6 +547,26 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
       'Customers' => data.customers.length,
       _ => data.vendors.length + data.customers.length,
     };
+
+    final now = DateTime.now();
+    DateTime? computedExpiresAt;
+    if (selectedDuration == '1 Day') {
+      computedExpiresAt = now.add(const Duration(days: 1));
+    } else if (selectedDuration == '3 Days') {
+      computedExpiresAt = now.add(const Duration(days: 3));
+    } else if (selectedDuration == '7 Days') {
+      computedExpiresAt = now.add(const Duration(days: 7));
+    } else if (selectedDuration == '14 Days') {
+      computedExpiresAt = now.add(const Duration(days: 14));
+    } else if (selectedDuration == '30 Days') {
+      computedExpiresAt = now.add(const Duration(days: 30));
+    } else if (selectedDuration == 'Custom Range (Calendar)' &&
+        customDateRange != null) {
+      computedExpiresAt = customDateRange!.end;
+    } else {
+      computedExpiresAt = null;
+    }
+
     if (widget.announcementToEdit != null) {
       final existing = widget.announcementToEdit!;
       final updated = existing.copyWith(
@@ -499,6 +574,7 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
         summary: body.text.trim(),
         audience: audience,
         isDraft: draft,
+        expiresAt: computedExpiresAt,
         notificationType: notify ? 'Push notification' : 'In-app notice',
         state: draft
             ? 'Draft'
@@ -523,6 +599,7 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
             summary: body.text.trim(),
             audience: audience,
             createdAt: DateTime.now(),
+            expiresAt: computedExpiresAt,
             isDraft: draft,
             notificationType: notify ? 'Push notification' : 'In-app notice',
             state: draft ? 'Draft' : 'Queued locally',
@@ -553,10 +630,13 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
     return Dialog(
       insetPadding: EdgeInsets.symmetric(
         horizontal: narrow ? 12 : 80,
-        vertical: narrow ? 18 : 48,
+        vertical: narrow ? 12 : 36,
       ),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 760),
+        constraints: BoxConstraints(
+          maxWidth: 760,
+          maxHeight: math.min(680.0, MediaQuery.sizeOf(context).height * 0.8),
+        ),
         child: SingleChildScrollView(
           padding: EdgeInsets.fromLTRB(narrow ? 16 : 28, 22, narrow ? 16 : 28, 20),
           child: Column(
@@ -619,26 +699,119 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
               const SizedBox(height: 7),
               TextField(controller: title),
               const SizedBox(height: 15),
-              const Text(
-                'Target Audience',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 7),
-              DropdownButtonFormField<String>(
-                initialValue: normalizeAudience(audience),
-                items: const ['All Users', 'Stall Holders', 'Customers']
-                    .map(
-                      (value) => DropdownMenuItem(
-                        value: value,
-                        child: Text(
-                          value,
-                          style: TextStyle(fontSize: 12),
-                        ),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final useColumn = constraints.maxWidth < 480;
+                  final audienceWidget = Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Target Audience',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
                       ),
-                    )
-                    .toList(),
-                onChanged: (value) =>
-                    setState(() => audience = normalizeAudience(value)),
+                      const SizedBox(height: 7),
+                      DropdownButtonFormField<String>(
+                        isExpanded: true,
+                        initialValue: normalizeAudience(audience),
+                        items: const ['All Users', 'Stall Holders', 'Customers']
+                            .map(
+                              (value) => DropdownMenuItem(
+                                value: value,
+                                child: Text(
+                                  value,
+                                  style: const TextStyle(fontSize: 12),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) =>
+                            setState(() => audience = normalizeAudience(value)),
+                      ),
+                    ],
+                  );
+
+                  final durationWidget = Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Announcement Duration',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 7),
+                      DropdownButtonFormField<String>(
+                        isExpanded: true,
+                        value: selectedDuration,
+                        items: const [
+                          '1 Day',
+                          '3 Days',
+                          '7 Days (1 Week)',
+                          '14 Days (2 Weeks)',
+                          '30 Days (1 Month)',
+                          'Permanent (No Expiry)',
+                          'Custom Range (Calendar)',
+                        ]
+                            .map(
+                              (value) => DropdownMenuItem(
+                                value: value,
+                                child: Text(
+                                  value,
+                                  style: const TextStyle(fontSize: 12),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) async {
+                          if (value == null) return;
+                          if (value == 'Custom Range (Calendar)') {
+                            final now = DateTime.now();
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: customDateRange?.end ??
+                                  now.add(const Duration(days: 7)),
+                              firstDate: DateTime(2024),
+                              lastDate: now.add(const Duration(days: 365)),
+                              barrierColor: Colors.black.withValues(alpha: 0.45),
+                              builder: _buildFloatingDatePicker,
+                            );
+                            if (picked != null) {
+                              setState(() {
+                                selectedDuration = 'Custom Range (Calendar)';
+                                customDateRange = DateTimeRange(
+                                  start: now,
+                                  end: DateTime(
+                                      picked.year, picked.month, picked.day, 23, 59, 59),
+                                );
+                              });
+                            }
+                          } else {
+                            setState(() => selectedDuration = value);
+                          }
+                        },
+                      ),
+                    ],
+                  );
+
+                  if (useColumn) {
+                    return Column(
+                      children: [
+                        audienceWidget,
+                        const SizedBox(height: 15),
+                        durationWidget,
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: audienceWidget),
+                      const SizedBox(width: 14),
+                      Expanded(child: durationWidget),
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: 16),
               Row(

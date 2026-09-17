@@ -204,6 +204,13 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
               label: 'Pending Reports',
               icon: Icons.folder_copy_outlined,
               accent: const Color(0xFFEF4444),
+              onTap: () {
+                setState(() {
+                  status = 'Pending';
+                  history = false;
+                });
+                _resetTable();
+              },
             ),
             MetricCardData(
               value:
@@ -211,6 +218,13 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
               label: 'Under Review',
               icon: Icons.visibility_outlined,
               accent: const Color(0xFF3B82F6),
+              onTap: () {
+                setState(() {
+                  status = 'Under Review';
+                  history = false;
+                });
+                _resetTable();
+              },
             ),
             MetricCardData(
               value:
@@ -218,6 +232,13 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
               label: 'Resolved',
               icon: Icons.check_circle_outline_rounded,
               accent: const Color(0xFF10B981),
+              onTap: () {
+                setState(() {
+                  status = 'Resolved';
+                  history = true;
+                });
+                _resetTable();
+              },
             ),
             MetricCardData(
               value: '$blockedCount',
@@ -228,6 +249,7 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
                       : 'Blocked Accounts',
               icon: Icons.block_outlined,
               accent: const Color(0xFFEF4444),
+              onTap: () => context.go('/accounts'),
             ),
           ],
         ),
@@ -242,6 +264,12 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
             title: history ? 'Resolved Report History' : 'Review Reports',
             headerAction: _ReportViewToggle(
               history: history,
+              reviewCount: filteredForMetrics
+                  .where((item) => item.status != ReportStatus.resolved)
+                  .length,
+              resolvedCount: filteredForMetrics
+                  .where((item) => item.status == ReportStatus.resolved)
+                  .length,
               onChanged: (value) {
                 setState(() {
                   history = value;
@@ -483,6 +511,16 @@ class _ReportTable extends StatelessWidget {
                         ),
                       ),
                       DataCell(
+                        Text(
+                          item.id,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: colors.secondaryText,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ),
+                      DataCell(
                         Wrap(
                           spacing: 7,
                           crossAxisAlignment: WrapCrossAlignment.center,
@@ -525,15 +563,13 @@ class _ReportTable extends StatelessWidget {
                         ),
                       ),
                       DataCell(
-                        Text(
-                          enumLabel(item.priority),
-                          style: TextStyle(
-                            color: item.priority == Priority.high
-                                ? colors.danger
-                                : item.priority == Priority.medium
-                                    ? colors.warning
-                                    : colors.mutedText,
-                          ),
+                        StatusBadge(
+                          label: enumLabel(item.priority).toUpperCase(),
+                          kind: item.priority == Priority.high
+                              ? BadgeKind.danger
+                              : item.priority == Priority.medium
+                                  ? BadgeKind.warning
+                                  : BadgeKind.neutral,
                         ),
                       ),
                     ],
@@ -543,7 +579,7 @@ class _ReportTable extends StatelessWidget {
         .toList();
     return ScrollableDataTable(
       verticalController: verticalController,
-      minWidth: history ? 1550 : 1450,
+      minWidth: history ? 1550 : 1550,
       columnSpacing: 18,
       columns: history
           ? const [
@@ -586,6 +622,10 @@ class _ReportTable extends StatelessWidget {
                 label: Text('TYPE'),
               ),
               DataColumn(
+                columnWidth: FlexColumnWidth(1.1),
+                label: Text('REPORT ID'),
+              ),
+              DataColumn(
                 columnWidth: FlexColumnWidth(1.5),
                 label: Text('ACCOUNT / ISSUE'),
               ),
@@ -620,9 +660,16 @@ class _ReportTable extends StatelessWidget {
 }
 
 class _ReportViewToggle extends StatelessWidget {
-  const _ReportViewToggle({required this.history, required this.onChanged});
+  const _ReportViewToggle({
+    required this.history,
+    required this.reviewCount,
+    required this.resolvedCount,
+    required this.onChanged,
+  });
 
   final bool history;
+  final int reviewCount;
+  final int resolvedCount;
   final ValueChanged<bool> onChanged;
 
   @override
@@ -672,16 +719,16 @@ class _ReportViewToggle extends StatelessWidget {
         elevation: const WidgetStatePropertyAll(0),
         mouseCursor: const WidgetStatePropertyAll(SystemMouseCursors.click),
       ),
-      segments: const [
+      segments: [
         ButtonSegment<bool>(
           value: false,
-          label: Text('Review'),
-          icon: Icon(Icons.inbox_outlined, size: 15),
+          label: Text('Review ($reviewCount)'),
+          icon: const Icon(Icons.inbox_outlined, size: 15),
         ),
         ButtonSegment<bool>(
           value: true,
-          label: Text('Resolved'),
-          icon: Icon(Icons.history_rounded, size: 15),
+          label: Text('Resolved ($resolvedCount)'),
+          icon: const Icon(Icons.history_rounded, size: 15),
         ),
       ],
       selected: {history},
@@ -1425,9 +1472,44 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
-                              child: Text(
-                                reportedDetail,
-                                style: const TextStyle(fontSize: 10),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    reportedDetail,
+                                    style: const TextStyle(fontSize: 10),
+                                  ),
+                                  if (account != null) ...[
+                                    const SizedBox(height: 3),
+                                    InkWell(
+                                      onTap: () {
+                                        Navigator.pop(context);
+                                        context.go(
+                                          '/accounts?accountId=${Uri.encodeComponent(account.id)}&open=1',
+                                        );
+                                      },
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            'View Account Profile',
+                                            style: TextStyle(
+                                              fontSize: 9.5,
+                                              color: semanticColors(context).accent,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 3),
+                                          Icon(
+                                            Icons.arrow_forward_rounded,
+                                            size: 10,
+                                            color: semanticColors(context).accent,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                             ),
                             StatusBadge(

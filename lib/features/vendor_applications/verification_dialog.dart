@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 
+import '../../core/theme/theme_extensions.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/admin_widgets.dart';
+import '../../core/widgets/document_viewer_modal.dart';
+import '../../data/mock_data.dart';
 import '../../data/repositories/mock_repository.dart';
+import '../../data/repositories/notification_repository.dart';
+import '../../models/admin_notification.dart';
 import '../../models/app_models.dart';
 
 class VerificationDialog extends ConsumerStatefulWidget {
@@ -67,37 +73,68 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
   Future<void> reject() async {
     final value = await showDialog<String>(
       context: context,
-      builder: (context) => const _PromptInputDialogWidget(
-        title: 'Reject application',
-        hintText: 'Add a reason...',
+      builder: (context) => _PromptInputDialogWidget(
+        title: widget.renewal != null
+            ? 'Reject renewal request'
+            : 'Reject application',
+        hintText: 'Add a mandatory reason for rejection...',
         confirmLabel: 'Reject',
         minLines: 2,
         maxLines: 4,
+        isRequired: true,
       ),
     );
-    if (value == null || value.isEmpty || !mounted) return;
+    if (value == null || value.trim().isEmpty || !mounted) return;
     setState(() => processing = true);
     if (widget.application != null) {
       await ref.read(appDataProvider.notifier).updateApplication(
             widget.id,
             ApplicationStatus.rejected,
-            rejectionReason: value,
+            rejectionReason: value.trim(),
           );
     }
     if (widget.renewal != null) {
-      await ref
-          .read(appDataProvider.notifier)
-          .updateRenewal(widget.id, RenewalStatus.expired);
+      await ref.read(appDataProvider.notifier).updateRenewal(
+            widget.id,
+            RenewalStatus.expired,
+            rejectionReason: value.trim(),
+          );
     }
     if (mounted) {
       Navigator.pop(context);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Application rejected.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.renewal != null
+                ? 'Renewal request rejected.'
+                : 'Application rejected.',
+          ),
+        ),
+      );
     }
   }
 
   Future<void> _reopenForReview() async {
+    final okay = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reopen for review?'),
+        content: const Text(
+          "Reopen this renewal for review? The stall holder's renewal status will change back to Under Review.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Reopen'),
+          ),
+        ],
+      ),
+    );
+    if (okay != true || !mounted) return;
     setState(() => processing = true);
     if (widget.application != null) {
       await ref
@@ -111,6 +148,7 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
     }
     if (mounted) {
       setState(() => processing = false);
+      Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Application reopened for review.')),
       );
@@ -136,7 +174,9 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
 
     final isApproved = (currentApp?.status == ApplicationStatus.verified) ||
         (currentRenewal?.status == RenewalStatus.approved);
-    final isRejected = (currentApp?.status == ApplicationStatus.rejected);
+    final isRejected = (currentApp?.status == ApplicationStatus.rejected) ||
+        (currentApp?.status == ApplicationStatus.invalidDocs) ||
+        (currentRenewal?.status == RenewalStatus.expired);
 
     return Dialog(
       insetPadding: EdgeInsets.symmetric(
@@ -157,7 +197,9 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'TENANTS  /  VERIFICATION DETAIL',
+                          widget.renewal != null
+                              ? 'RENEWALS  /  RENEWAL REQUEST DETAIL'
+                              : 'TENANTS  /  VERIFICATION DETAIL',
                           style: TextStyle(
                             fontSize: 9,
                             color: Theme.of(
@@ -183,7 +225,7 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                                     ),
                                   ),
                                   Text(
-                                    'Submitted: ${shortDate.format(DateTime.now())}  •  ${widget.location}',
+                                    'Submitted: ${shortDate.format(currentRenewal?.submittedAt ?? currentApp?.submittedAt ?? widget.renewal?.submittedAt ?? widget.application?.submittedAt ?? DateTime.now())}  •  ${widget.location}',
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(fontSize: 10),
                                   ),
@@ -239,12 +281,14 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
     required VendorApplication? currentApp,
     required RenewalRequest? currentRenewal,
   }) {
+    final dateTimeFormat = DateFormat("MMM dd, yyyy 'at' h:mm a");
+
     if (isApproved) {
-      final dateStr = currentApp?.reviewedAt != null
-          ? shortDate.format(currentApp!.reviewedAt!)
-          : currentRenewal?.submittedAt != null
-              ? shortDate.format(currentRenewal!.submittedAt!)
-              : shortDate.format(DateTime.now());
+      final date = currentApp?.reviewedAt ??
+          currentRenewal?.submittedAt ??
+          currentApp?.submittedAt ??
+          DateTime.now();
+      final dateStr = dateTimeFormat.format(date);
       final label = widget.renewal != null
           ? 'Approved on $dateStr'
           : 'Verified on $dateStr';
@@ -271,7 +315,7 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  '✓ $label',
+                  label,
                   style: GoogleFonts.inter(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
@@ -295,10 +339,15 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
     }
 
     if (isRejected) {
-      final dateStr = currentApp?.reviewedAt != null
-          ? shortDate.format(currentApp!.reviewedAt!)
-          : shortDate.format(DateTime.now());
-      final reason = currentApp?.rejectionReason;
+      final date = currentApp?.reviewedAt ??
+          currentRenewal?.submittedAt ??
+          currentApp?.submittedAt ??
+          DateTime.now();
+      final dateStr = dateTimeFormat.format(date);
+      final reason = currentApp?.rejectionReason ?? currentRenewal?.rejectionReason;
+      final label = currentRenewal != null && (reason == null || reason.isEmpty)
+          ? 'Expired on $dateStr'
+          : 'Rejected on $dateStr';
 
       return Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -324,7 +373,7 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      '✗ Rejected on $dateStr${reason != null && reason.isNotEmpty ? ' • Reason: $reason' : ''}',
+                      '$label${reason != null && reason.isNotEmpty ? ' • Reason: $reason' : ''}',
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.inter(
                         fontSize: 13,
@@ -409,28 +458,19 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
   }
 
   Widget _documents(BuildContext context) {
-    final documents = widget.application?.documents ?? const <KycDocument>[];
-    final tiles = documents.isNotEmpty
-        ? documents.map((document) => _docModel(context, document)).toList()
-        : [
-            _doc(context, 'Mayor’s Permit', null),
-            _doc(
-              context,
-              'Sanitary Permit',
-              'assets/images/mobile_conversation.png',
-            ),
-            _doc(context, 'ID', 'assets/images/mobile_conversation.png'),
-            _doc(
-              context,
-              'Fire Certification',
-              'assets/images/spoiled_produce.png',
-            ),
-            _doc(
-              context,
-              'Market Clearance',
-              'assets/images/mobile_conversation.png',
-            ),
-          ];
+    final rawDocs = widget.application?.documents ?? widget.renewal?.documents;
+    final effectiveSubmittedAt = widget.renewal?.submittedAt ??
+        widget.application?.submittedAt ??
+        DateTime.now();
+    final documents = (rawDocs != null && rawDocs.isNotEmpty)
+        ? rawDocs
+        : seedKycDocuments(effectiveSubmittedAt);
+
+    final tiles = <Widget>[];
+    for (int i = 0; i < documents.length; i++) {
+      tiles.add(_docModel(context, documents[i], i, documents));
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -443,7 +483,7 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
             ),
             const SizedBox(width: 8),
             Text(
-              'Required Documents',
+              'Required Documents (${documents.length} of 5 Required Uploads)',
               style: GoogleFonts.inter(
                 fontSize: 15,
                 fontWeight: FontWeight.bold,
@@ -461,7 +501,8 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                   : 3,
           crossAxisSpacing: 14,
           mainAxisSpacing: 14,
-          childAspectRatio: MediaQuery.sizeOf(context).width < 500 ? 1.6 : 1.15,
+          childAspectRatio:
+              MediaQuery.sizeOf(context).width < 500 ? 1.6 : 1.15,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           children: tiles,
@@ -470,50 +511,64 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
     );
   }
 
-  Widget _docModel(BuildContext context, KycDocument document) {
+  Widget _docModel(
+    BuildContext context,
+    KycDocument document,
+    int index,
+    List<KycDocument> allDocuments,
+  ) {
     final asset = document.assetPath;
+    final ext = document.filename.split('.').last.toLowerCase();
+    final isPdf = ext == 'pdf' || document.mimeType.contains('pdf');
+    final isWord =
+        ext == 'doc' || ext == 'docx' || document.mimeType.contains('word');
+
     return _doc(
       context,
-      document.name,
-      asset,
+      name: document.name,
+      asset: asset,
       filename:
           '${document.filename} • ${shortDate.format(document.uploadedAt)}',
+      isPdf: isPdf,
+      isWord: isWord,
+      onTap: () {
+        showDialog<void>(
+          context: context,
+          builder: (context) => DocumentViewerModal(
+            documents: allDocuments,
+            initialIndex: index,
+            applicantName: widget.applicant,
+            stallName: widget.stall,
+          ),
+        );
+      },
     );
   }
 
   Widget _doc(
-    BuildContext context,
-    String name,
-    String? asset, {
-    String? filename,
+    BuildContext context, {
+    required String name,
+    required String? asset,
+    required String filename,
+    required bool isPdf,
+    required bool isWord,
+    required VoidCallback onTap,
   }) {
     final colors = semanticColors(context);
-    final content = asset == null
-        ? Center(
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: colors.accent.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.description_outlined,
-                size: 38,
-                color: colors.accent,
-              ),
-            ),
-          )
-        : Image.asset(asset, fit: BoxFit.cover);
+
+    final Widget content;
+    if (asset != null) {
+      content = Image.asset(
+        asset,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _docPlaceholderIcon(colors, isPdf, isWord),
+      );
+    } else {
+      content = _docPlaceholderIcon(colors, isPdf, isWord);
+    }
 
     return InkWell(
-      onTap: () => showDialog<void>(
-        context: context,
-        builder: (context) => Dialog(
-          child: asset == null
-              ? const Icon(Icons.description_outlined, size: 160)
-              : Image.asset(asset),
-        ),
-      ),
+      onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Container(
         decoration: BoxDecoration(
@@ -533,29 +588,63 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
           children: [
             Expanded(
               child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(11)),
                 child: content,
               ),
             ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(color: colors.subtleBorder, width: 0.8),
+            Tooltip(
+              message: '$name\n$filename',
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(color: colors.subtleBorder, width: 0.8),
+                  ),
                 ),
-              ),
-              child: Text(
-                filename == null ? name : '$name\n$filename',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w700,
-                  color: colors.primaryText,
+                child: Text(
+                  '$name\n$filename',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    color: colors.primaryText,
+                  ),
                 ),
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _docPlaceholderIcon(
+      AppSemanticColors colors, bool isPdf, bool isWord) {
+    final iconData = isPdf
+        ? Icons.picture_as_pdf_rounded
+        : isWord
+            ? Icons.description_rounded
+            : Icons.description_outlined;
+    final iconColor = isPdf
+        ? const Color(0xFFEF4444)
+        : isWord
+            ? const Color(0xFF2563EB)
+            : colors.accent;
+
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: iconColor.withValues(alpha: 0.1),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          iconData,
+          size: 38,
+          color: iconColor,
         ),
       ),
     );
@@ -893,11 +982,25 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
             ApplicationStatus.invalidDocs,
             rejectionReason: value,
           );
+      ref.read(notificationProvider.notifier).addNotification(
+            title: 'Additional Documents Requested',
+            message: 'Requested document update from ${widget.applicant}: "$value"',
+            type: NotificationType.vendorApplication,
+            route: '/applications',
+            actionLabel: 'View Status',
+          );
     }
     if (widget.renewal != null) {
       await ref
           .read(appDataProvider.notifier)
           .updateRenewal(widget.id, RenewalStatus.reviewing);
+      ref.read(notificationProvider.notifier).addNotification(
+            title: 'Additional Documents Requested',
+            message: 'Requested document update from ${widget.applicant}: "$value"',
+            type: NotificationType.renewal,
+            route: '/renewals',
+            actionLabel: 'View Status',
+          );
     }
     if (mounted) {
       Navigator.pop(context);
@@ -920,6 +1023,7 @@ class _PromptInputDialogWidget extends StatefulWidget {
     this.maxLines = 1,
     this.minLines = 1,
     this.defaultOnEmpty = '',
+    this.isRequired = false,
   });
 
   final String title;
@@ -928,6 +1032,7 @@ class _PromptInputDialogWidget extends StatefulWidget {
   final int maxLines;
   final int minLines;
   final String defaultOnEmpty;
+  final bool isRequired;
 
   @override
   State<_PromptInputDialogWidget> createState() =>
@@ -941,16 +1046,27 @@ class _PromptInputDialogWidgetState extends State<_PromptInputDialogWidget> {
   void initState() {
     super.initState();
     _controller = TextEditingController();
+    if (widget.isRequired) {
+      _controller.addListener(_onTextChanged);
+    }
+  }
+
+  void _onTextChanged() {
+    setState(() {});
   }
 
   @override
   void dispose() {
+    if (widget.isRequired) {
+      _controller.removeListener(_onTextChanged);
+    }
     _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final canSubmit = !widget.isRequired || _controller.text.trim().isNotEmpty;
     return AlertDialog(
       title: Text(widget.title),
       content: TextField(
@@ -958,7 +1074,12 @@ class _PromptInputDialogWidgetState extends State<_PromptInputDialogWidget> {
         minLines: widget.minLines,
         maxLines: widget.maxLines,
         autofocus: true,
-        decoration: InputDecoration(hintText: widget.hintText),
+        decoration: InputDecoration(
+          hintText: widget.hintText,
+          errorText: widget.isRequired && _controller.text.trim().isEmpty
+              ? 'Reason is required'
+              : null,
+        ),
       ),
       actions: [
         TextButton(
@@ -966,14 +1087,16 @@ class _PromptInputDialogWidgetState extends State<_PromptInputDialogWidget> {
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: () {
-            final text = _controller.text.trim();
-            if (text.isEmpty && widget.defaultOnEmpty.isNotEmpty) {
-              Navigator.pop(context, widget.defaultOnEmpty);
-            } else {
-              Navigator.pop(context, text);
-            }
-          },
+          onPressed: canSubmit
+              ? () {
+                  final text = _controller.text.trim();
+                  if (text.isEmpty && widget.defaultOnEmpty.isNotEmpty) {
+                    Navigator.pop(context, widget.defaultOnEmpty);
+                  } else {
+                    Navigator.pop(context, text);
+                  }
+                }
+              : null,
           child: Text(widget.confirmLabel),
         ),
       ],
