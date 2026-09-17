@@ -176,12 +176,12 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
             ? reports.where(_isStallHolderReport).toList()
             : reports.where(_isCustomerReport).toList();
 
-    final blockedCount = targetType == 'All Types'
-        ? appData.vendors.where((item) => item.status == AccountStatus.blocked).length +
-            appData.customers.where((item) => item.status == AccountStatus.blocked).length
+    final suspendedCount = targetType == 'All Types'
+        ? appData.vendors.where((item) => item.status == AccountStatus.suspended).length +
+            appData.customers.where((item) => item.status == AccountStatus.suspended).length
         : targetType == 'Stall Holders'
-            ? appData.vendors.where((item) => item.status == AccountStatus.blocked).length
-            : appData.customers.where((item) => item.status == AccountStatus.blocked).length;
+            ? appData.vendors.where((item) => item.status == AccountStatus.suspended).length
+            : appData.customers.where((item) => item.status == AccountStatus.suspended).length;
 
     return ListView(
       padding: EdgeInsets.zero,
@@ -241,14 +241,14 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
               },
             ),
             MetricCardData(
-              value: '$blockedCount',
+              value: '$suspendedCount',
               label: targetType == 'Stall Holders'
-                  ? 'Blocked Stall Holders'
+                  ? 'Suspended Stall Holders'
                   : targetType == 'Customers'
-                      ? 'Blocked Customers'
-                      : 'Blocked Accounts',
-              icon: Icons.block_outlined,
-              accent: const Color(0xFFEF4444),
+                      ? 'Suspended Customers'
+                      : 'Suspended Accounts',
+              icon: Icons.pause_circle_outline_rounded,
+              accent: const Color(0xFFF59E0B),
               onTap: () => context.go('/accounts'),
             ),
           ],
@@ -442,16 +442,7 @@ class _ReportTable extends StatelessWidget {
     final rows = values
         .map(
           (item) {
-            final isNew = !history && newReportIds.contains(item.id);
             return DataRow(
-              color: isNew
-                  ? WidgetStateProperty.resolveWith<Color?>((states) {
-                      if (states.contains(WidgetState.hovered)) {
-                        return colors.info.withValues(alpha: 0.13);
-                      }
-                      return colors.info.withValues(alpha: 0.07);
-                    })
-                  : null,
               onSelectChanged: (_) => onOpen(item),
               cells: history
                   ? [
@@ -489,25 +480,9 @@ class _ReportTable extends StatelessWidget {
                     ]
                   : [
                       DataCell(
-                        Row(
-                          children: [
-                            if (isNew)
-                              Container(
-                                width: 3.5,
-                                height: 24,
-                                margin: const EdgeInsets.only(right: 8),
-                                decoration: BoxDecoration(
-                                  color: colors.info,
-                                  borderRadius: BorderRadius.circular(2),
-                                ),
-                              ),
-                            Expanded(
-                              child: Text(
-                                item.type == 'Vendor' ? 'Stall Holder' : item.type,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
+                        Text(
+                          item.type == 'Vendor' ? 'Stall Holder' : item.type,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       DataCell(
@@ -521,23 +496,12 @@ class _ReportTable extends StatelessWidget {
                         ),
                       ),
                       DataCell(
-                        Wrap(
-                          spacing: 7,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            Text(
-                              item.accountIssue,
-                              style: TextStyle(
-                                color: colors.accent,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            if (isNew)
-                              const StatusBadge(
-                                label: 'NEW',
-                                kind: BadgeKind.info,
-                              ),
-                          ],
+                        Text(
+                          item.accountIssue,
+                          style: TextStyle(
+                            color: colors.accent,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ),
                       DataCell(Text(item.submittedBy)),
@@ -934,22 +898,25 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
     );
   }
 
-  Future<void> _blockAccount(_ReportedAccount? account) async {
+
+  Future<void> _suspendAccount(_ReportedAccount? account) async {
     if (account == null || processing) return;
-    final reasonResult = await showDialog<String>(
+    final result = await showDialog<_ReportSuspensionData>(
       context: context,
-      builder: (dialogContext) => _ReportBlockAccountDialog(
+      builder: (dialogContext) => _ReportSuspendAccountDialog(
         accountName: account.name,
         accountType: account.type,
         reportId: widget.report.id,
       ),
     );
-    if (reasonResult == null || reasonResult.isEmpty || !mounted) return;
+    if (result == null || !mounted) return;
     setState(() => processing = true);
     final error =
-        await ref.read(appDataProvider.notifier).blockAccountFromReport(
+        await ref.read(appDataProvider.notifier).suspendAccountFromReport(
               reportId: widget.report.id,
-              reason: reasonResult,
+              reason: result.reason,
+              startDate: result.startDate,
+              endDate: result.endDate,
             );
     if (!mounted) return;
     if (error != null) {
@@ -961,7 +928,7 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content:
-            Text('Account blocked successfully. Report moved to Resolved.'),
+            Text('Account suspended successfully. Report moved to Resolved.'),
       ),
     );
     if (mounted) {
@@ -1211,7 +1178,7 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
         borderRadius: BorderRadius.circular(18),
       ),
     );
-    final dangerStyle = FilledButton.styleFrom(
+    final suspendStyle = FilledButton.styleFrom(
       backgroundColor: semanticColors(context).danger,
       minimumSize: const Size(0, 36),
       padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -1248,13 +1215,16 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
       label: const Text('Mark as Resolved', style: TextStyle(fontSize: 11.5)),
     );
 
-    final blockBtn = FilledButton.icon(
-      onPressed: processing || account == null
+    final suspendBtn = FilledButton.icon(
+      onPressed: processing ||
+              account == null ||
+              account.status == AccountStatus.blocked ||
+              account.status == AccountStatus.suspended
           ? null
-          : () => _blockAccount(account),
-      style: dangerStyle,
-      icon: const Icon(Icons.block_outlined, size: 16),
-      label: const Text('Block Account', style: TextStyle(fontSize: 11.5)),
+          : () => _suspendAccount(account),
+      style: suspendStyle,
+      icon: const Icon(Icons.pause_circle_outline, size: 16),
+      label: const Text('Suspend Account', style: TextStyle(fontSize: 11.5)),
     );
 
     return Container(
@@ -1265,35 +1235,35 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          if (constraints.maxWidth > 650) {
+          if (constraints.maxWidth > 600) {
             return Row(
               children: [
                 Expanded(child: warningBtn),
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
                 Expanded(child: dismissBtn),
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
                 Expanded(child: resolveBtn),
-                const SizedBox(width: 10),
-                Expanded(child: blockBtn),
+                const SizedBox(width: 8),
+                Expanded(child: suspendBtn),
               ],
             );
-          } else if (constraints.maxWidth > 450) {
+          } else if (constraints.maxWidth > 420) {
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Row(
                   children: [
                     Expanded(child: warningBtn),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
                     Expanded(child: dismissBtn),
                   ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 Row(
                   children: [
                     Expanded(child: resolveBtn),
-                    const SizedBox(width: 10),
-                    Expanded(child: blockBtn),
+                    const SizedBox(width: 8),
+                    Expanded(child: suspendBtn),
                   ],
                 ),
               ],
@@ -1309,7 +1279,7 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
               const SizedBox(height: 8),
               resolveBtn,
               const SizedBox(height: 8),
-              blockBtn,
+              suspendBtn,
             ],
           );
         },
@@ -1771,8 +1741,21 @@ class _ResolveReportDialogState extends State<_ResolveReportDialog> {
   }
 }
 
-class _ReportBlockAccountDialog extends StatefulWidget {
-  const _ReportBlockAccountDialog({
+
+class _ReportSuspensionData {
+  const _ReportSuspensionData({
+    required this.reason,
+    required this.startDate,
+    required this.endDate,
+  });
+
+  final String reason;
+  final DateTime startDate;
+  final DateTime endDate;
+}
+
+class _ReportSuspendAccountDialog extends StatefulWidget {
+  const _ReportSuspendAccountDialog({
     required this.accountName,
     required this.accountType,
     required this.reportId,
@@ -1783,18 +1766,23 @@ class _ReportBlockAccountDialog extends StatefulWidget {
   final String reportId;
 
   @override
-  State<_ReportBlockAccountDialog> createState() =>
-      _ReportBlockAccountDialogState();
+  State<_ReportSuspendAccountDialog> createState() =>
+      _ReportSuspendAccountDialogState();
 }
 
-class _ReportBlockAccountDialogState extends State<_ReportBlockAccountDialog> {
+class _ReportSuspendAccountDialogState
+    extends State<_ReportSuspendAccountDialog> {
   late final TextEditingController _reasonController;
+  late DateTime _startDate;
+  late DateTime _endDate;
   String? _validationError;
 
   @override
   void initState() {
     super.initState();
     _reasonController = TextEditingController();
+    _startDate = DateTime.now();
+    _endDate = DateTime.now().add(const Duration(days: 7));
   }
 
   @override
@@ -1803,38 +1791,116 @@ class _ReportBlockAccountDialogState extends State<_ReportBlockAccountDialog> {
     super.dispose();
   }
 
+  Future<void> _pickDate(bool start) async {
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: start ? _startDate : _endDate,
+      firstDate: start ? DateUtils.dateOnly(_startDate) : _startDate,
+      lastDate: DateTime.now().add(const Duration(days: 3650)),
+    );
+    if (selected == null) return;
+    setState(() {
+      if (start) {
+        _startDate = selected;
+        if (!_endDate.isAfter(_startDate)) {
+          _endDate = _startDate.add(const Duration(days: 1));
+        }
+      } else {
+        _endDate = selected;
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Block Account?'),
+      title: const Text('Suspend Account?'),
       content: SizedBox(
-        width: 430,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Reported User: ${widget.accountName}'),
-            const SizedBox(height: 6),
-            Text('Account Type: ${widget.accountType}'),
-            const SizedBox(height: 6),
-            Text('Related Report: #${widget.reportId}'),
-            const SizedBox(height: 14),
-            TextField(
-              controller: _reasonController,
-              minLines: 2,
-              maxLines: 4,
-              onChanged: (_) {
-                if (_validationError != null) {
-                  setState(() => _validationError = null);
-                }
-              },
-              decoration: InputDecoration(
-                labelText: 'Blocking Reason *',
-                hintText: 'Enter the reason for blocking',
-                errorText: _validationError,
+        width: 440,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Reported User: ${widget.accountName}'),
+              const SizedBox(height: 6),
+              Text('Account Type: ${widget.accountType}'),
+              const SizedBox(height: 6),
+              Text('Related Report: #${widget.reportId}'),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _reasonController,
+                minLines: 2,
+                maxLines: 4,
+                onChanged: (_) {
+                  if (_validationError != null) {
+                    setState(() => _validationError = null);
+                  }
+                },
+                decoration: InputDecoration(
+                  labelText: 'Suspension Reason *',
+                  hintText: 'Enter the reason for temporary suspension',
+                  errorText: _validationError,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => _pickDate(true),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 12,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Starts', style: TextStyle(fontSize: 11)),
+                          const SizedBox(height: 2),
+                          Text(
+                            shortDate.format(_startDate),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => _pickDate(false),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 12,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Ends', style: TextStyle(fontSize: 11)),
+                          const SizedBox(height: 2),
+                          Text(
+                            shortDate.format(_endDate),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
       actions: [
@@ -1850,14 +1916,28 @@ class _ReportBlockAccountDialogState extends State<_ReportBlockAccountDialog> {
             final reason = _reasonController.text.trim();
             if (reason.isEmpty) {
               setState(
-                () => _validationError = 'A blocking reason is required.',
+                () => _validationError = 'A suspension reason is required.',
               );
               return;
             }
-            Navigator.pop(context, reason);
+            if (!_endDate.isAfter(_startDate)) {
+              setState(
+                () => _validationError =
+                    'The end date must be after the start date.',
+              );
+              return;
+            }
+            Navigator.pop(
+              context,
+              _ReportSuspensionData(
+                reason: reason,
+                startDate: _startDate,
+                endDate: _endDate,
+              ),
+            );
           },
-          icon: const Icon(Icons.block_outlined, size: 17),
-          label: const Text('Block Account'),
+          icon: const Icon(Icons.pause_circle_outline, size: 17),
+          label: const Text('Suspend Account'),
         ),
       ],
     );

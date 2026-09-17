@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
@@ -63,10 +64,42 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
           .updateRenewal(widget.id, RenewalStatus.approved);
     }
     if (mounted) {
+      final latestVendors = ref.read(appDataProvider).vendors;
+      final createdVendor = latestVendors.cast<Vendor?>().firstWhere(
+            (v) =>
+                v?.name.trim().toLowerCase() ==
+                    widget.application?.applicant.trim().toLowerCase() ||
+                v?.id == 'VND-${widget.id.replaceAll(RegExp(r'[^0-9]'), '')}',
+            orElse: () => latestVendors.isNotEmpty ? latestVendors.first : null,
+          );
+
+      final messenger = ScaffoldMessenger.of(context);
+      final nav = GoRouter.of(context);
+
       Navigator.pop(context);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Application approved.')));
+
+      if (widget.application != null) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              'Application approved! Stall allocation (${createdVendor?.location ?? widget.application?.location}) locked.',
+            ),
+            duration: const Duration(seconds: 8),
+            action: createdVendor != null
+                ? SnackBarAction(
+                    label: 'View Account',
+                    onPressed: () {
+                      nav.go('/accounts?accountId=${createdVendor.id}&open=1');
+                    },
+                  )
+                : null,
+          ),
+        );
+      } else {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Stall renewal approved.')),
+        );
+      }
     }
   }
 
@@ -293,8 +326,22 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
           ? 'Approved on $dateStr'
           : 'Verified on $dateStr';
 
-      return Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      final latestVendors = ref.watch(appDataProvider).vendors;
+      final vendor = latestVendors.cast<Vendor?>().firstWhere(
+            (v) =>
+                v?.name.trim().toLowerCase() ==
+                    widget.applicant.trim().toLowerCase() ||
+                v?.id == 'VND-${widget.id.replaceAll(RegExp(r'[^0-9]'), '')}',
+            orElse: () => null,
+          );
+      final targetVendorId =
+          vendor?.id ?? 'VND-${widget.id.replaceAll(RegExp(r'[^0-9]'), '')}';
+
+      return Wrap(
+        spacing: 12,
+        runSpacing: 8,
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -325,14 +372,28 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
               ],
             ),
           ),
-          OutlinedButton.icon(
-            onPressed: processing ? null : _reopenForReview,
-            icon: const Icon(Icons.refresh_rounded, size: 16),
-            label: const Text('Reopen for Review'),
-            style: OutlinedButton.styleFrom(
-              side: BorderSide(color: semanticColors(context).subtleBorder),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FilledButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  context.go('/accounts?accountId=$targetVendorId&open=1');
+                },
+                icon: const Icon(Icons.person_outline_rounded, size: 16),
+                label: const Text('View Account Profile'),
+              ),
+              const SizedBox(width: 10),
+              OutlinedButton.icon(
+                onPressed: processing ? null : _reopenForReview,
+                icon: const Icon(Icons.refresh_rounded, size: 16),
+                label: const Text('Reopen for Review'),
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: semanticColors(context).subtleBorder),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+              ),
+            ],
           ),
         ],
       );
@@ -482,12 +543,14 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
               color: semanticColors(context).secondaryText,
             ),
             const SizedBox(width: 8),
-            Text(
-              'Required Documents (${documents.length} of 5 Required Uploads)',
-              style: GoogleFonts.inter(
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-                color: semanticColors(context).primaryText,
+            Expanded(
+              child: Text(
+                'Required Documents (${documents.length} of 5 Required Uploads)',
+                style: GoogleFonts.inter(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: semanticColors(context).primaryText,
+                ),
               ),
             ),
           ],
@@ -706,6 +769,24 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                 'EMAIL ADDRESS',
                 '${widget.applicant.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '.')}@gmail.com',
               ),
+              if (app?.status == ApplicationStatus.verified || renewal?.status == RenewalStatus.approved) ...[
+                const SizedBox(height: 6),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    final targetId = 'VND-${widget.id.replaceAll(RegExp(r'[^0-9]'), '')}';
+                    Navigator.pop(context);
+                    context.go('/accounts?accountId=$targetId&open=1');
+                  },
+                  icon: const Icon(Icons.person_outline_rounded, size: 15),
+                  label: const Text('View Account Profile'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(36),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),

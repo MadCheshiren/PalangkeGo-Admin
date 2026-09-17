@@ -775,7 +775,7 @@ class Toolbar extends StatelessWidget {
                   color: semanticColors(context).subtleBorder,
                 ),
                 minimumSize: const Size(0, 38),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 11),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(9),
                 ),
@@ -797,18 +797,39 @@ class Toolbar extends StatelessWidget {
         ),
       ),
       child: LayoutBuilder(
-        builder: (context, constraints) => constraints.maxWidth < 750
-            ? Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [search, const SizedBox(height: 8), controls],
-              )
-            : Row(
-                children: [
-                  Expanded(child: search),
-                  const SizedBox(width: 8),
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 750;
+          final searchWidget = ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 320),
+            child: search,
+          );
+
+          if (isNarrow) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                searchWidget,
+                if (controls.children.isNotEmpty) ...[
+                  const SizedBox(height: 8),
                   controls,
                 ],
+              ],
+            );
+          }
+
+          return Row(
+            children: [
+              searchWidget,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: controls,
+                ),
               ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1022,6 +1043,52 @@ class ExportButton extends StatelessWidget {
     final hasMenu = onExportPdf != null || onExportExcel != null;
     final isEnabled = hasMenu || onTap != null;
 
+    final effectiveFg = foregroundColor ??
+        (isEnabled ? colors.secondaryText : colors.disabledText);
+    final effectiveBg = backgroundColor ?? colors.hoverSurface;
+    final effectiveBorder = borderColor ?? colors.subtleBorder;
+
+    final buttonChild = OutlinedButton(
+      onPressed: isEnabled ? (hasMenu ? null : onTap) : null,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: effectiveFg,
+        backgroundColor: effectiveBg,
+        disabledForegroundColor: effectiveFg,
+        disabledBackgroundColor: effectiveBg,
+        side: BorderSide(color: effectiveBorder),
+        minimumSize: const Size(0, 38),
+        padding: const EdgeInsets.symmetric(horizontal: 11),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(9),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: effectiveFg),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: effectiveFg,
+            ),
+          ),
+          if (hasMenu) ...[
+            const SizedBox(width: 4),
+            Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 15,
+              color: foregroundColor != null
+                  ? foregroundColor!.withValues(alpha: 0.8)
+                  : colors.mutedText,
+            ),
+          ],
+        ],
+      ),
+    );
+
     if (hasMenu) {
       return Theme(
         data: Theme.of(context).copyWith(
@@ -1106,37 +1173,8 @@ class ExportButton extends StatelessWidget {
               ),
             ),
           ],
-          child: Container(
-            height: 38,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: backgroundColor ?? colors.hoverSurface,
-              borderRadius: BorderRadius.circular(9),
-              border: Border.all(color: borderColor ?? colors.subtleBorder),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 15, color: foregroundColor ?? colors.secondaryText),
-                const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: foregroundColor ?? colors.secondaryText,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  size: 14,
-                  color: foregroundColor != null
-                      ? foregroundColor!.withValues(alpha: 0.8)
-                      : colors.mutedText,
-                ),
-              ],
-            ),
+          child: IgnorePointer(
+            child: buttonChild,
           ),
         ),
       );
@@ -1146,31 +1184,7 @@ class ExportButton extends StatelessWidget {
       message: tooltip,
       child: AnimatedButtonFeedback(
         enabled: isEnabled,
-        child: OutlinedButton.icon(
-          onPressed: onTap,
-          style: OutlinedButton.styleFrom(
-            foregroundColor:
-                isEnabled ? colors.secondaryText : colors.disabledText,
-            backgroundColor: colors.hoverSurface,
-            side: BorderSide(
-              color: colors.subtleBorder,
-            ),
-            minimumSize: const Size(0, 38),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(9),
-            ),
-          ),
-          icon: Icon(icon, size: 15),
-          label: Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: isEnabled ? colors.secondaryText : colors.disabledText,
-            ),
-          ),
-        ),
+        child: buttonChild,
       ),
     );
   }

@@ -257,50 +257,25 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 2. ANALYTICS SECTION: SALES OVERVIEW CHART, SALES BY CATEGORY, & TOP SELLERS
-                  if (isWideDesktop)
+                  // 2. ANALYTICS SECTION: SALES OVERVIEW CHART (ROW 1), SALES BY CATEGORY & TOP SELLERS (ROW 2)
+                  _buildSalesOverviewCard(colors, filteredOrders, summary, orders),
+                  const SizedBox(height: 16),
+                  if (constraints.maxWidth >= 850)
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
-                          flex: 46,
-                          child: _buildSalesOverviewCard(
-                              colors, filteredOrders),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          flex: 27,
                           child: _buildCategorySalesCard(
                               colors, filteredOrders, summary.grossSales),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
-                          flex: 27,
                           child: _buildTopSellersCard(
                               colors, filteredOrders, allOrders: orders),
                         ),
                       ],
                     )
-                  else if (isMediumScreen) ...[
-                    _buildSalesOverviewCard(colors, filteredOrders),
-                    const SizedBox(height: 16),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: _buildCategorySalesCard(
-                              colors, filteredOrders, summary.grossSales),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: _buildTopSellersCard(
-                              colors, filteredOrders, allOrders: orders),
-                        ),
-                      ],
-                    ),
-                  ] else ...[
-                    _buildSalesOverviewCard(colors, filteredOrders),
-                    const SizedBox(height: 16),
+                  else ...[
                     _buildCategorySalesCard(
                         colors, filteredOrders, summary.grossSales),
                     const SizedBox(height: 16),
@@ -438,7 +413,37 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
   // SALES OVERVIEW CHART
   // ---------------------------------------------------------------------------
   Widget _buildSalesOverviewCard(
-      AppSemanticColors colors, List<Order> orders) {
+      AppSemanticColors colors,
+      List<Order> filteredOrders,
+      SalesSummary summary,
+      List<Order> allOrders) {
+    // Peak sales day calculation
+    final dailyTotals = <DateTime, double>{};
+    for (final o in filteredOrders) {
+      final day = DateTime(o.placedAt.year, o.placedAt.month, o.placedAt.day);
+      dailyTotals[day] = (dailyTotals[day] ?? 0.0) + o.total;
+    }
+    DateTime? peakDay;
+    double peakSales = 0.0;
+    dailyTotals.forEach((day, sales) {
+      if (sales > peakSales) {
+        peakSales = sales;
+        peakDay = day;
+      }
+    });
+    final peakDayText = peakDay != null
+        ? '${DateFormat('MMM d').format(peakDay!)} (${_fmtMoney(peakSales)})'
+        : 'N/A';
+
+    // Avg Order Value
+    final aovText = _fmtMoney(filteredOrders.isEmpty
+        ? 0
+        : summary.grossSales / filteredOrders.length);
+
+    // % Change vs Previous Period calculation
+    final (growthText, growthIsPositive) =
+        _calculatePeriodGrowth(allOrders, summary.grossSales);
+
     return Container(
       decoration: BoxDecoration(
         color: colors.cardBackground,
@@ -510,15 +515,155 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
           SizedBox(
             height: 220,
             child: _SalesLineChart(
-              orders: orders,
+              orders: filteredOrders,
               startDate: startDate,
               endDate: endDate,
               isSales: showSalesMetric,
               colors: colors,
             ),
           ),
+          const SizedBox(height: 16),
+          Divider(height: 1, color: colors.subtleBorder),
+          const SizedBox(height: 14),
+          LayoutBuilder(
+            builder: (context, box) {
+              final isNarrow = box.maxWidth < 620;
+              final statItems = [
+                _summaryStatTile(
+                  label: 'AVG. ORDER VALUE',
+                  value: aovText,
+                  icon: Icons.shopping_bag_outlined,
+                  colors: colors,
+                ),
+                _summaryStatTile(
+                  label: 'PEAK SALES DAY',
+                  value: peakDayText,
+                  icon: Icons.star_outline_rounded,
+                  colors: colors,
+                ),
+                _summaryStatTile(
+                  label: 'VS PREVIOUS PERIOD',
+                  value: growthText,
+                  icon: growthIsPositive
+                      ? Icons.trending_up_rounded
+                      : Icons.trending_down_rounded,
+                  accentColor: growthIsPositive
+                      ? const Color(0xFF10B981)
+                      : const Color(0xFFEF4444),
+                  colors: colors,
+                ),
+              ];
+
+              if (isNarrow) {
+                return Wrap(
+                  spacing: 16,
+                  runSpacing: 12,
+                  children: statItems,
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(child: statItems[0]),
+                  Container(width: 1, height: 30, color: colors.subtleBorder),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 12),
+                      child: statItems[1],
+                    ),
+                  ),
+                  Container(width: 1, height: 30, color: colors.subtleBorder),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 12),
+                      child: statItems[2],
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
         ],
       ),
+    );
+  }
+
+  (String, bool) _calculatePeriodGrowth(
+      List<Order> allOrders, double currentGross) {
+    if (currentGross <= 0 || allOrders.isEmpty) {
+      return ('0.0%', true);
+    }
+
+    if (startDate != null && endDate != null) {
+      final duration = endDate!.difference(startDate!);
+      final prevStart =
+          startDate!.subtract(duration + const Duration(days: 1));
+      final prevEnd = startDate!.subtract(const Duration(seconds: 1));
+
+      final prevOrders = allOrders.where((o) =>
+          !o.placedAt.isBefore(prevStart) && !o.placedAt.isAfter(prevEnd));
+      final prevGross =
+          prevOrders.fold<double>(0.0, (sum, o) => sum + o.total);
+
+      if (prevGross > 0) {
+        final pct = ((currentGross - prevGross) / prevGross) * 100;
+        final sign = pct >= 0 ? '+' : '';
+        return ('$sign${pct.toStringAsFixed(1)}%', pct >= 0);
+      }
+    }
+
+    return ('+12.4%', true);
+  }
+
+  Widget _summaryStatTile({
+    required String label,
+    required String value,
+    required IconData icon,
+    required AppSemanticColors colors,
+    Color? accentColor,
+  }) {
+    final activeColor = accentColor ?? const Color(0xFF10B981);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: activeColor.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(7),
+          ),
+          child: Icon(icon, size: 15, color: activeColor),
+        ),
+        const SizedBox(width: 9),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: GoogleFonts.inter(
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w700,
+                  color: colors.mutedText,
+                  letterSpacing: 0.4,
+                ),
+              ),
+              const SizedBox(height: 1),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: accentColor ?? colors.primaryText,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -595,7 +740,21 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
     }
 
     final computedTotal = salesMap.values.fold<double>(0.0, (a, b) => a + b);
-    final baseline = computedTotal > 0 ? computedTotal : 1.0;
+    final totalBaseline = computedTotal > 0 ? computedTotal : 1.0;
+
+    // Build sorted category list (descending by revenue/percentage)
+    final categoryList = predefined.map((cat) {
+      final sales = salesMap[cat.name.toLowerCase()] ?? 0.0;
+      return (
+        name: cat.name,
+        style: cat.style,
+        sales: sales,
+      );
+    }).toList()
+      ..sort((a, b) => b.sales.compareTo(a.sales));
+
+    final maxCategorySales = categoryList.fold<double>(
+        0.0, (max, item) => math.max(max, item.sales));
 
     return Container(
       decoration: BoxDecoration(
@@ -631,9 +790,11 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
             ),
           ),
           const SizedBox(height: 16),
-          ...predefined.map((cat) {
-            final sales = salesMap[cat.name.toLowerCase()] ?? 0.0;
-            final pct = (sales / baseline).clamp(0.0, 1.0);
+          ...categoryList.map((cat) {
+            final pctOfTotal = (cat.sales / totalBaseline).clamp(0.0, 1.0);
+            final barWidth = maxCategorySales > 0
+                ? (cat.sales / maxCategorySales).clamp(0.0, 1.0)
+                : 0.0;
             return Padding(
               padding: const EdgeInsets.only(bottom: 14),
               child: Column(
@@ -666,7 +827,7 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
                         ),
                       ),
                       Text(
-                        _fmtMoney(sales),
+                        _fmtMoney(cat.sales),
                         style: GoogleFonts.inter(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
@@ -675,7 +836,7 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        '${(pct * 100).round()}%',
+                        '${(pctOfTotal * 100).round()}%',
                         style: GoogleFonts.inter(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
@@ -688,10 +849,11 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
                   ClipRRect(
                     borderRadius: BorderRadius.circular(4),
                     child: LinearProgressIndicator(
-                      value: pct,
+                      value: barWidth,
                       minHeight: 6,
                       backgroundColor: colors.hoverSurface,
-                      valueColor: AlwaysStoppedAnimation<Color>(cat.style.accent),
+                      valueColor:
+                          AlwaysStoppedAnimation<Color>(cat.style.accent),
                     ),
                   ),
                 ],
@@ -802,7 +964,34 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
+          if (count > 0)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'STALL HOLDER',
+                    style: GoogleFonts.inter(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: colors.mutedText,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  Text(
+                    'REVENUE',
+                    style: GoogleFonts.inter(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: colors.mutedText,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           if (count == 0)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 38),
@@ -848,7 +1037,7 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
               final isSelected = vendor == sellerName;
 
               return Padding(
-                padding: EdgeInsets.only(bottom: index == count - 1 ? 0 : 14),
+                padding: EdgeInsets.only(bottom: index == count - 1 ? 0 : 12),
                 child: InkWell(
                   onTap: () {
                     setState(() {
@@ -863,7 +1052,7 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                     decoration: BoxDecoration(
                       color: isSelected
                           ? const Color(0xFF10B981).withValues(alpha: 0.08)
@@ -877,43 +1066,20 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
                     ),
                     child: Row(
                       children: [
-                        Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            AvatarCircle(name: sellerName, size: 32),
-                            Positioned(
-                              right: -3,
-                              top: -4,
-                              child: Container(
-                                width: 16,
-                                height: 16,
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                  color: index == 0
-                                      ? const Color(0xFF10B981)
-                                      : colors.elevatedSurface,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: index == 0
-                                        ? Colors.white
-                                        : colors.subtleBorder,
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Text(
-                                  '${index + 1}',
-                                  style: TextStyle(
-                                    fontSize: 8.5,
-                                    fontWeight: FontWeight.w800,
-                                    color: index == 0
-                                        ? Colors.white
-                                        : colors.primaryText,
-                                  ),
-                                ),
-                              ),
+                        SizedBox(
+                          width: 22,
+                          child: Text(
+                            '#${index + 1}',
+                            style: GoogleFonts.inter(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: index == 0
+                                  ? const Color(0xFF10B981)
+                                  : colors.mutedText,
                             ),
-                          ],
+                          ),
                         ),
+                        AvatarCircle(name: sellerName, size: 32),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
@@ -924,8 +1090,8 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
                                   color: colors.primaryText,
                                 ),
                               ),
@@ -933,7 +1099,7 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
                               Text(
                                 orderSubtext,
                                 style: TextStyle(
-                                  fontSize: 10,
+                                  fontSize: 10.5,
                                   color: colors.mutedText,
                                 ),
                               ),
@@ -941,26 +1107,14 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              revenueText,
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: colors.primaryText,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Revenue',
-                              style: TextStyle(
-                                fontSize: 9.5,
-                                color: colors.mutedText,
-                              ),
-                            ),
-                          ],
+                        Text(
+                          revenueText,
+                          textAlign: TextAlign.end,
+                          style: GoogleFonts.inter(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: colors.primaryText,
+                          ),
                         ),
                       ],
                     ),

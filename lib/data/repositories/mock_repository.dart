@@ -596,20 +596,64 @@ class AppDataController extends StateNotifier<AppDataState> {
       state.applications.where((item) => item.id == id),
     );
     final reviewedAt = DateTime.now();
+
+    final updatedApplications = state.applications
+        .map(
+          (item) => item.id == id
+              ? item.copyWith(
+                  status: status,
+                  rejectionReason: rejectionReason,
+                  reviewedAt: reviewedAt,
+                  reviewedBy: 'ADM-001',
+                )
+              : item,
+        )
+        .toList();
+
+    List<Vendor> updatedVendors = List<Vendor>.from(state.vendors);
+
+    if (status == ApplicationStatus.verified && current != null) {
+      final existingIndex = updatedVendors.indexWhere(
+        (v) =>
+            v.name.trim().toLowerCase() == current.applicant.trim().toLowerCase() ||
+            v.id == 'VND-${current.id.replaceAll(RegExp(r'[^0-9]'), '')}',
+      );
+      if (existingIndex >= 0) {
+        updatedVendors[existingIndex] = updatedVendors[existingIndex].copyWith(
+          status: AccountStatus.active,
+          administrativeNotes:
+              'Account reactivated upon KYC application approval.',
+        );
+      } else {
+        final cleanName = current.applicant
+            .toLowerCase()
+            .replaceAll(RegExp(r'[^a-z]+'), '.');
+        final newVendor = Vendor(
+          id: 'VND-${8500 + updatedVendors.length + 1}',
+          name: current.applicant,
+          email: '${cleanName.isEmpty ? 'vendor' : cleanName}@mepco.com',
+          stallType: current.category,
+          registeredAt: reviewedAt,
+          status: AccountStatus.active,
+          location: current.location.isNotEmpty
+              ? current.location
+              : 'Section A, Stall #1',
+          orders: 0,
+          transactions: 0.0,
+          phone: '+63 921 555 ${1000 + updatedVendors.length}',
+          residence: 'Brgy. Peñafrancia, Naga City',
+          administrativeNotes:
+              'Account automatically created upon KYC application approval. Stall allocation locked to ${current.location}.',
+        );
+        updatedVendors.insert(0, newVendor);
+      }
+    }
+
     state = state.copyWith(
-      applications: state.applications
-          .map(
-            (item) => item.id == id
-                ? item.copyWith(
-                    status: status,
-                    rejectionReason: rejectionReason,
-                    reviewedAt: reviewedAt,
-                    reviewedBy: 'ADM-001',
-                  )
-                : item,
-          )
-          .toList(),
+      applications: updatedApplications,
+      vendors: updatedVendors,
     );
+
     final updated =
         _firstOrNull(state.applications.where((item) => item.id == id));
     if (updated != null) await _persistApplication(updated);
@@ -622,7 +666,10 @@ class AppDataController extends StateNotifier<AppDataState> {
       targetUserName: current?.applicant ?? id,
       previousValue: enumLabel(current?.status ?? ApplicationStatus.reviewing),
       newValue: enumLabel(status),
-      reason: rejectionReason ?? '',
+      reason: rejectionReason ??
+          (status == ApplicationStatus.verified
+              ? 'Approved & stall allocation locked to ${current?.location ?? "unassigned"}'
+              : ''),
     );
   }
 
@@ -646,17 +693,40 @@ class AppDataController extends StateNotifier<AppDataState> {
     }
     await _wait();
     final current = _firstOrNull(state.renewals.where((item) => item.id == id));
+
+    final updatedRenewals = state.renewals
+        .map(
+          (item) => item.id == id
+              ? item.copyWith(
+                  status: status,
+                  rejectionReason: rejectionReason,
+                )
+              : item,
+        )
+        .toList();
+
+    List<Vendor> updatedVendors = List<Vendor>.from(state.vendors);
+
+    if (status == RenewalStatus.approved && current != null) {
+      final now = DateTime.now();
+      final targetYear = (now.month > 1 || (now.month == 1 && now.day > 7)) ? 2027 : 2026;
+      final existingIndex = updatedVendors.indexWhere(
+        (v) =>
+            v.name.trim().toLowerCase() == current.applicant.trim().toLowerCase() ||
+            v.location.trim().toLowerCase() == current.location.trim().toLowerCase(),
+      );
+      if (existingIndex >= 0) {
+        updatedVendors[existingIndex] = updatedVendors[existingIndex].copyWith(
+          status: AccountStatus.active,
+          administrativeNotes:
+              'Stall lease contract renewed and extended to $targetYear-01-07.',
+        );
+      }
+    }
+
     state = state.copyWith(
-      renewals: state.renewals
-          .map(
-            (item) => item.id == id
-                ? item.copyWith(
-                    status: status,
-                    rejectionReason: rejectionReason,
-                  )
-                : item,
-          )
-          .toList(),
+      renewals: updatedRenewals,
+      vendors: updatedVendors,
     );
     final updated = _firstOrNull(state.renewals.where((item) => item.id == id));
     if (updated != null) await _persistRenewal(updated);
@@ -664,7 +734,7 @@ class AppDataController extends StateNotifier<AppDataState> {
       action: AuditAction.editAccountStatus,
       targetEntityType: 'Renewal',
       targetEntityId: id,
-      targetUserName: id,
+      targetUserName: current?.applicant ?? id,
       previousValue: enumLabel(current?.status ?? RenewalStatus.reviewing),
       newValue: enumLabel(status),
       reason: rejectionReason ?? '',

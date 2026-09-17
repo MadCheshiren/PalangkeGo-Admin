@@ -4,42 +4,39 @@ import '../models/admin_models.dart';
 import '../models/app_models.dart';
 
 final _names = [
-  'Aicel D. Castillo Fish Retailer',
-  'Diosa Fruit Stand',
-  'William Del Rosario Meat Shop',
-  'Sophie Sb’s store',
-  'Luzon Fresh Produce',
-  'Santos Quality Meats',
-  'Maria Clara Vegetables',
-  'Antonio Crafts',
-  'Naga Dry Goods',
-  'Rico’s Seafood Corner',
-  'Mila General Merchandise',
-  'Bicol Harvest',
-  'Green Basket Stall',
-  'Northside Fish Depot',
-  'Tita Lory’s Snacks',
-  'Harvest Lane Fruits',
-  'Golden Grain Supplies',
-  'Market Day Essentials',
-  'Coco & Root Pantry',
-  'Baybayin Butchery',
-  'Fresh Finds Cooperative',
-  'Aling Cora’s Greens',
-  'Seaside Catch',
-  'Seven Hills Grocer',
-  'The Corner Basket',
+  'Aicel Castillo',
+  'Diosa Del Rosario',
+  'William Del Rosario',
+  'Sophie Sb',
+  'Elena Ramos',
+  'Ricardo Santos',
+  'Maria Clara Santos',
+  'Antonio Reyes',
+  'Bianca Salazar',
+  'Rico Fernandez',
+  'Mila Mendoza',
+  'Carlo Mendoza',
+  'Diana Villanueva',
+  'Emilio Navarro',
+  'Fatima Cruz',
+  'Gabriel Lim',
+  'Helena Bautista',
+  'Isaac Fernandez',
+  'Julia Ramos',
+  'Kevin Tan',
+  'Lucia Flores',
+  'Cora Morales',
+  'Mateo Garcia',
+  'Nina Castillo',
+  'Omar Rivera',
 ];
 
 final _customers = [
-  'Alex Richardson',
-  'Linda Williams',
-  'Dr. Sarah Chen',
-  'Marcus Koppel',
-  'Elena Petrova',
   'Juan Dela Cruz',
   'Maria Santos',
   'Paolo Rivera',
+  'Marcus Koppel',
+  'Elena Petrova',
   'Bea Navarro',
   'Nina Morales',
   'Catherine Tan',
@@ -57,34 +54,9 @@ final _customers = [
   'Derek Wong',
   'Anne Castillo',
   'Sam Ortega',
-];
-
-const _applicationApplicants = [
-  'Elena Rodriguez',
-  'Ricardo Santos',
-  'Maria Clara',
-  'Antonio Reyes',
-  'Bianca Salazar',
-  'Carlo Mendoza',
-  'Diana Villanueva',
-  'Emilio Navarro',
-  'Fatima Cruz',
-  'Gabriel Lim',
-  'Helena Bautista',
-  'Isaac Fernandez',
-  'Julia Ramos',
-  'Kevin Tan',
-  'Lucia Flores',
-  'Mateo Garcia',
-  'Nina Castillo',
-  'Omar Rivera',
-  'Patricia Yu',
-  'Quentin Morales',
-  'Rosa Dela Cruz',
-  'Samuel Wong',
-  'Teresa Mercado',
-  'Ulises Aquino',
-  'Valeria Reyes',
+  'Sarah Chen',
+  'Alex Richardson',
+  'Linda Williams',
 ];
 
 const _applicationStalls = [
@@ -115,39 +87,81 @@ const _applicationStalls = [
   'Zest and Spice Stall',
 ];
 
-List<Vendor> seedVendors() {
+List<Vendor> seedVendors({List<Order>? ordersSource}) {
   final base = DateTime(2023, 10, 12, 10, 45);
-  return List.generate(_names.length, (index) {
-    final statuses = [
-      AccountStatus.active,
-      AccountStatus.active,
-      AccountStatus.offline,
-      AccountStatus.suspended,
-      AccountStatus.blocked,
-    ];
-    final types = [
-      'Fresh Fish',
-      'Dried Fish',
-      'Meat',
-      'Chicken',
-      'Fruits',
-      'Vegetables',
-      'Maritatas',
-      'Sari-Sari',
-    ];
+  final nagaBarangays = [
+    'Brgy. Peñafrancia, Naga City',
+    'Brgy. Dayangdang, Naga City',
+    'Brgy. Triangulo, Naga City',
+    'Brgy. Concepcion Grande, Naga City',
+    'Brgy. Tinago, Naga City',
+    'Brgy. Mabolo, Naga City',
+    'Brgy. Sabang, Naga City',
+    'Brgy. San Felipe, Naga City',
+    'Brgy. Cararayan, Naga City',
+    'Brgy. Pacol, Naga City',
+  ];
+  final types = [
+    'Fresh Fish',
+    'Dried Fish',
+    'Meat',
+    'Chicken',
+    'Fruits',
+    'Vegetables',
+    'Maritatas',
+    'SARI-SARI',
+  ];
+
+  final ordersList = ordersSource ?? seedOrders();
+  final vendorStats = <String, (int count, double revenue)>{};
+  for (final o in ordersList) {
+    final current = vendorStats[o.vendorName] ?? (0, 0.0);
+    vendorStats[o.vendorName] = (current.$1 + 1, current.$2 + o.total);
+  }
+
+  // Seed vendor accounts for applicants whose initial applications are verified
+  final verifiedIndices = [0, 1, 3, 4, 6, 7, 8, 10, 11, 13, 15, 16, 18, 19, 21, 22, 24];
+
+  return List.generate(verifiedIndices.length, (i) {
+    final index = verifiedIndices[i];
+    final AccountStatus status = switch (index) {
+      4 => AccountStatus.offline,
+      6 => AccountStatus.suspended,
+      7 => AccountStatus.blocked,
+      19 => AccountStatus.offline,
+      _ => AccountStatus.active,
+    };
+    final isBlocked = status == AccountStatus.blocked;
+    final vendorName = _names[index % _names.length];
+    final stats = vendorStats[vendorName];
+    final orderCount = stats?.$1 ?? (1429 - index * 31);
+    final totalTransactions = stats?.$2 ?? (42800 - index * 875).toDouble();
+
     return Vendor(
       id: 'VND-${8492 + index}',
-      name: _names[index],
+      name: vendorName,
       email: 'vendor_${8492 + index}@mepco.com',
       stallType: types[index % types.length],
       registeredAt: base.add(Duration(days: index * 8, hours: index % 7)),
-      status: statuses[index % statuses.length],
-      location:
-          'Section ${String.fromCharCode(65 + index % 5)}, Stall #${44 + index % 12}',
-      orders: 1429 - index * 31,
-      transactions: 42800 - index * 875,
+      status: status,
+      location: 'Block ${14 + index % 4} - Stall ${2 + index % 8}',
+      orders: orderCount,
+      transactions: totalTransactions,
       phone: '+63 921 555 ${1000 + index}',
-      residence: '${742 + index} Evergreen Terrace, Springfield',
+      residence: nagaBarangays[index % nagaBarangays.length],
+      administrativeNotes: isBlocked
+          ? 'Account permanently restricted due to policy violations.'
+          : status == AccountStatus.suspended
+              ? 'Account temporarily under administrative review.'
+              : 'Stall holder account verified.',
+      blockedReason: isBlocked
+          ? 'Repeated non-compliance with market sanitary guidelines and unauthorized subletting.'
+          : null,
+      blockedFromReportId: isBlocked ? '#REP-${1040 + index}' : null,
+      blockedAt: isBlocked
+          ? DateTime(2024, 1, 15).subtract(Duration(days: index * 2))
+          : null,
+      blockedBy: isBlocked ? 'Kirren Michael Fraginal' : null,
     );
   });
 }
@@ -183,25 +197,26 @@ List<VendorApplication> seedApplications() {
     'MARITATAS',
     'SARI-SARI',
   ];
-  final statuses = [
-    ApplicationStatus.verified,
-    ApplicationStatus.reviewing,
-    ApplicationStatus.invalidDocs,
-    ApplicationStatus.verified,
-  ];
   return List.generate(
     25,
-    (index) => VendorApplication(
-      id: '#APP-${92834 + index}',
-      applicant: _applicationApplicants[index],
-      stallName: _applicationStalls[index],
-      category: categories[index % categories.length],
-      submittedAt: DateTime(2023, 10, 24).subtract(Duration(days: index)),
-      status: statuses[index % statuses.length],
-      location: 'Block ${14 + index % 4} - Stall ${2 + index % 8}',
-      documents: seedKycDocuments(
-          DateTime(2023, 10, 24).subtract(Duration(days: index))),
-    ),
+    (index) {
+      final status = switch (index) {
+        5 || 9 || 12 || 17 || 20 => ApplicationStatus.reviewing,
+        2 || 14 || 23 => ApplicationStatus.invalidDocs,
+        _ => ApplicationStatus.verified,
+      };
+      return VendorApplication(
+        id: '#APP-${92834 + index}',
+        applicant: _names[index % _names.length],
+        stallName: _applicationStalls[index % _applicationStalls.length],
+        category: categories[index % categories.length],
+        submittedAt: DateTime(2023, 10, 24).subtract(Duration(days: index)),
+        status: status,
+        location: 'Block ${14 + index % 4} - Stall ${2 + index % 8}',
+        documents: seedKycDocuments(
+            DateTime(2023, 10, 24).subtract(Duration(days: index))),
+      );
+    },
   );
 }
 
@@ -265,12 +280,6 @@ List<RenewalRequest> seedRenewals() {
     'MARITATAS',
     'SARI-SARI',
   ];
-  final statuses = [
-    RenewalStatus.approved,
-    RenewalStatus.reviewing,
-    RenewalStatus.expired,
-    RenewalStatus.approved,
-  ];
   final now = DateTime.now();
   final targetYear = (now.month > 1 || (now.month == 1 && now.day > 7)) ? 2027 : 2026;
   final annualJanuaryDeadline = DateTime(targetYear, 1, 7);
@@ -279,21 +288,24 @@ List<RenewalRequest> seedRenewals() {
   return List.generate(
     25,
     (index) {
-      final status = statuses[index % statuses.length];
+      final status = switch (index) {
+        1 || 5 || 9 || 13 || 17 || 21 => RenewalStatus.reviewing,
+        2 || 6 || 10 || 14 || 18 => RenewalStatus.expired,
+        _ => RenewalStatus.approved,
+      };
       final DateTime expiryDate = switch (status) {
         RenewalStatus.expired => expiredJanuaryDeadline,
         RenewalStatus.reviewing => annualJanuaryDeadline,
         RenewalStatus.approved => annualJanuaryDeadline,
       };
-      // Annual renewals submitted during the 1st week of January (Jan 1 - Jan 7)
       final DateTime submittedAt = status == RenewalStatus.expired
           ? expiredJanuaryDeadline.subtract(Duration(days: index % 5 + 1))
-          : DateTime(targetYear - 1, 12, 28).add(Duration(days: (index % 7) + 1));
+          : DateTime(now.year, now.month, now.day).subtract(Duration(days: index % 5));
 
       return RenewalRequest(
         id: '#RN-${92834 + index}',
-        applicant: _applicationApplicants[index],
-        stallName: _applicationStalls[index],
+        applicant: _names[index % _names.length],
+        stallName: _applicationStalls[index % _applicationStalls.length],
         category: categories[index % categories.length],
         expiryDate: expiryDate,
         status: status,
@@ -479,7 +491,7 @@ List<Announcement> seedAnnouncements() => [
       ),
     ];
 
-const topSellerNames = ['Ivan Navarro', 'Akisha San Miguel', 'Schylle Palmero'];
+const topSellerNames = ['Aicel Castillo', 'Mila Mendoza', 'Elena Ramos'];
 const topSellerRevenue = ['43.9k', '34.1k', '17.1k'];
 const topSellerOrders = ['2395 orders', '2013 orders', '1579 orders'];
 
@@ -490,32 +502,82 @@ List<Order> seedOrders() {
     'Juan Dela Cruz',
     'Maria Santos'
   ];
-  final vendors = [
-    'Aicel D. Castillo Fish Retailer',
-    'Diosa Fruit Stand',
-    'Santos Quality Meats',
-    'Luzon Fresh Produce'
+
+  final vendorProfiles = [
+    (
+      name: 'Aicel Castillo',
+      category: 'FRESH FISH',
+      stall: 'Fresh Fish Section',
+      products: [
+        ('Bangus', 220.0),
+        ('Tilapia', 180.0),
+      ],
+    ),
+    (
+      name: 'Mila Mendoza',
+      category: 'MEAT',
+      stall: 'Meat Section',
+      products: [
+        ('Pork Belly', 360.0),
+        ('Beef Sirloin', 420.0),
+      ],
+    ),
+    (
+      name: 'Elena Ramos',
+      category: 'FRUITS',
+      stall: 'Fruit Section',
+      products: [
+        ('Mangoes', 180.0),
+        ('Ripe Papaya & Bananas', 120.0),
+      ],
+    ),
+    (
+      name: 'Sophie Sb',
+      category: 'CHICKEN',
+      stall: 'Chicken Section',
+      products: [
+        ('Whole Dressed Chicken', 210.0),
+        ('Chicken Wings & Thighs', 190.0),
+      ],
+    ),
+    (
+      name: 'Emilio Navarro',
+      category: 'VEGETABLES',
+      stall: 'Vegetables Section',
+      products: [
+        ('Fresh Vegetables', 150.0),
+        ('Pinakbet Pack', 110.0),
+      ],
+    ),
+    (
+      name: 'Diosa Del Rosario',
+      category: 'DRIED FISH',
+      stall: 'Dried Fish Section',
+      products: [
+        ('Daing na Bangus', 160.0),
+        ('Tuyô & Danggit', 140.0),
+      ],
+    ),
+    (
+      name: 'Maria Clara Santos',
+      category: 'MARITATAS',
+      stall: 'Maritatas Section',
+      products: [
+        ('Cassava Cake & Delicacies', 120.0),
+        ('Native Kakanin', 90.0),
+      ],
+    ),
+    (
+      name: 'Antonio Reyes',
+      category: 'SARI-SARI',
+      stall: 'Sari-Sari Section',
+      products: [
+        ('Canned Goods & Essentials', 85.0),
+        ('Cooking Oil & Condiments', 75.0),
+      ],
+    ),
   ];
-  final stalls = [
-    'Fresh Fish Section',
-    'Dried Fish Section',
-    'Meat Section',
-    'Chicken Section',
-    'Fruit Section',
-    'Vegetables Section',
-    'Maritatas Section',
-    'Sari-Sari Section',
-  ];
-  final products = [
-    ('Bangus', 'FRESH FISH', 220.0),
-    ('Daing na Bangus', 'DRIED FISH', 160.0),
-    ('Pork Belly', 'MEAT', 360.0),
-    ('Whole Dressed Chicken', 'CHICKEN', 210.0),
-    ('Mangoes', 'FRUITS', 180.0),
-    ('Fresh Vegetables', 'VEGETABLES', 150.0),
-    ('Cassava Cake & Delicacies', 'MARITATAS', 120.0),
-    ('Canned Goods & Essentials', 'SARI-SARI', 85.0),
-  ];
+
   final statuses = [
     OrderStatus.completed,
     OrderStatus.completed,
@@ -538,33 +600,49 @@ List<Order> seedOrders() {
     PaymentMethod.wallet,
     PaymentMethod.cashOnDelivery,
   ];
+
   return List.generate(48, (index) {
-    final product = products[index % products.length];
-    final second = products[(index + 1) % products.length];
+    // Select vendor profile ensuring realistic distribution across Accounts stall holders
+    final profileIdx = switch (index % 12) {
+      0 || 1 || 2 => 0, // Aicel Castillo (Fresh Fish) - 12 orders
+      3 || 4 => 1,      // Mila Mendoza (Meat) - 8 orders
+      5 || 6 => 2,      // Elena Ramos (Fruits) - 8 orders
+      7 => 3,           // Sophie Sb (Chicken) - 4 orders
+      8 => 4,           // Emilio Navarro (Vegetables) - 4 orders
+      9 => 5,           // Diosa Del Rosario (Dried Fish) - 4 orders
+      10 => 6,          // Maria Clara Santos (Maritatas) - 4 orders
+      _ => 7,           // Antonio Reyes (SARI-SARI) - 4 orders
+    };
+
+    final profile = vendorProfiles[profileIdx];
+    final prodPrimary = profile.products[index % profile.products.length];
+    final prodSecondary = profile.products[(index + 1) % profile.products.length];
     final quantity = 1 + index % 4;
+
     final items = [
       OrderItem(
-        name: product.$1,
-        category: product.$2,
+        name: prodPrimary.$1,
+        category: profile.category,
         quantity: quantity,
-        unitPrice: product.$3,
+        unitPrice: prodPrimary.$2,
       ),
       if (index % 3 == 0)
         OrderItem(
-          name: second.$1,
-          category: second.$2,
+          name: prodSecondary.$1,
+          category: profile.category,
           quantity: 1,
-          unitPrice: second.$3,
+          unitPrice: prodSecondary.$2,
         ),
     ];
+
     return Order(
       id: 'ORD-${2026001 + index}',
       transactionId: 'TXN-${72001 + index}',
       placedAt: DateTime.now()
           .subtract(Duration(days: index % 38, hours: index % 12)),
       customerName: customers[index % customers.length],
-      vendorName: vendors[index % vendors.length],
-      stallName: stalls[index % stalls.length],
+      vendorName: profile.name,
+      stallName: profile.stall,
       items: items,
       discounts: index % 5 == 0 ? 25 : 0,
       deliveryFee: 40,
@@ -588,22 +666,38 @@ const avatarColors = [
 
 List<Suspension> seedSuspensions() {
   final now = DateTime.now();
-  return [
+  final vendors = seedVendors();
+  final suspendedVendors =
+      vendors.where((v) => v.status == AccountStatus.suspended).toList();
+
+  final suspensions = <Suspension>[];
+
+  for (var i = 0; i < suspendedVendors.length; i++) {
+    final v = suspendedVendors[i];
+    suspensions.add(
+      Suspension(
+        id: 'SUS-${9001 + i}',
+        accountId: v.id,
+        accountName: v.name,
+        accountType: 'Stall Holder',
+        reason: i % 2 == 0
+            ? 'Sanitary permit expired and pending renewal inspection'
+            : 'Pricing inconsistency and stall encroachment under investigation',
+        startDate: now.subtract(Duration(days: 2 + i)),
+        endDate: now.add(Duration(days: 5 + i)),
+        administratorId: 'ADM-001',
+        administratorName: 'Kirren Michael Fraginal',
+        createdAt: now.subtract(Duration(days: 2 + i)),
+        note: 'Stall temporarily held pending compliance review',
+        notifyUser: true,
+        relatedReportId: '#REP-${1020 + i}',
+      ),
+    );
+  }
+
+  suspensions.add(
     Suspension(
-      id: 'SUS-9001',
-      accountId: 'VND-8495',
-      accountName: 'Sophie Sb’s store',
-      accountType: 'Vendor',
-      reason: 'Pricing inconsistency under investigation',
-      startDate: now.subtract(const Duration(days: 2)),
-      endDate: now.add(const Duration(days: 5)),
-      administratorId: 'ADM-001',
-      createdAt: now.subtract(const Duration(days: 2)),
-      note: 'Stall temporarily held pending inspection',
-      notifyUser: true,
-    ),
-    Suspension(
-      id: 'SUS-9002',
+      id: 'SUS-9099',
       accountId: 'CUS-1203',
       accountName: 'Marcus Koppel',
       accountType: 'Customer',
@@ -611,11 +705,15 @@ List<Suspension> seedSuspensions() {
       startDate: now.subtract(const Duration(days: 1)),
       endDate: now.add(const Duration(days: 6)),
       administratorId: 'ADM-001',
+      administratorName: 'Kirren Michael Fraginal',
       createdAt: now.subtract(const Duration(days: 1)),
       note: 'Account temporarily suspended for review',
       notifyUser: true,
+      relatedReportId: '#REP-1015',
     ),
-  ];
+  );
+
+  return suspensions;
 }
 
 List<AuditLog> seedAuditLogs() {

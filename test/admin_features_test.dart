@@ -230,7 +230,7 @@ void main() {
     final report = controller.state.reports.firstWhere(
       (item) =>
           (item.type == 'Vendor' || item.type == 'Stall Holder') &&
-          item.accountIssue == 'Diosa Fruit Stand',
+          item.accountIssue.contains('Diosa'),
     );
 
     final error = await controller.blockAccountFromReport(
@@ -240,7 +240,7 @@ void main() {
 
     expect(error, isNull);
     final vendor = controller.state.vendors.firstWhere(
-      (item) => item.name == 'Diosa Fruit Stand',
+      (item) => item.name.contains('Diosa'),
     );
     expect(vendor.status, AccountStatus.blocked);
     expect(vendor.blockedReason, 'Repeated marketplace violations');

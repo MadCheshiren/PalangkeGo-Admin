@@ -50,10 +50,6 @@ class _AnnouncementHistoryPageState
     final deliveredCount = announcements
         .where((a) => a.state == 'Sent' || (!a.isDraft && a.deliveredCount > 0))
         .length;
-    final totalReach = announcements.fold<int>(
-      0,
-      (sum, a) => sum + a.deliveredCount,
-    );
     final draftOrQueuedCount = announcements
         .where((a) => a.isDraft || a.state == 'Draft' || a.state == 'Queued locally')
         .length;

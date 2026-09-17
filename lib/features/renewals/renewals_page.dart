@@ -138,11 +138,6 @@ class _RenewalsPageState extends ConsumerState<RenewalsPage> {
         )
         .toList()
       ..sort((a, b) {
-        final aIsNew = newRenewalIds.contains(a.id);
-        final bIsNew = newRenewalIds.contains(b.id);
-        if (aIsNew != bIsNew) {
-          return aIsNew ? -1 : 1;
-        }
         final aDate = a.submittedAt ?? a.expiryDate;
         final bDate = b.submittedAt ?? b.expiryDate;
         return bDate.compareTo(aDate);
@@ -461,40 +456,16 @@ class _Table extends StatelessWidget {
     final colors = semanticColors(context);
     final rows = values.map((v) {
       final days = v.expiryDate.difference(DateTime.now()).inDays;
-      final isNew = !history && v.status == RenewalStatus.reviewing && newRenewalIds.contains(v.id);
       return DataRow(
-        color: isNew
-            ? WidgetStateProperty.resolveWith<Color?>((states) {
-                if (states.contains(WidgetState.hovered)) {
-                  return colors.info.withValues(alpha: 0.13);
-                }
-                return colors.info.withValues(alpha: 0.07);
-              })
-            : null,
         onSelectChanged: (_) => open(v),
         cells: [
           DataCell(
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (isNew)
-                  Container(
-                    width: 3.5,
-                    height: 24,
-                    margin: const EdgeInsets.only(right: 8),
-                    decoration: BoxDecoration(
-                      color: colors.info,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                Text(
-                  v.id,
-                  style: TextStyle(
-                    color: colors.accent,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
+            Text(
+              v.id,
+              style: TextStyle(
+                color: colors.accent,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
           DataCell(
@@ -503,43 +474,35 @@ class _Table extends StatelessWidget {
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 AvatarCircle(name: v.applicant, size: 28),
-                Text(
-                  v.applicant,
-                  style: isNew
-                      ? const TextStyle(fontWeight: FontWeight.w700)
-                      : null,
-                ),
-                if (isNew)
-                  const StatusBadge(
-                    label: 'NEW',
-                    kind: BadgeKind.info,
-                  ),
+                Text(v.applicant),
               ],
             ),
           ),
           DataCell(Text(v.stallName)),
           DataCell(CategoryBadge(category: v.category)),
           DataCell(
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(shortDate.format(v.expiryDate)),
-                Text(
-                  days < 0 ? 'Expired ${days.abs()}d ago' : '$days days left',
-                  style: TextStyle(
-                    fontSize: 9.5,
-                    fontWeight:
-                        (days <= 3 || days < 0) ? FontWeight.w800 : FontWeight.w500,
-                    color: (days <= 3 || days < 0)
-                        ? colors.danger
-                        : days <= 7
-                            ? colors.warning
-                            : colors.mutedText,
-                  ),
-                ),
-              ],
-            ),
+            history
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(shortDate.format(v.expiryDate)),
+                      Text(
+                        days < 0 ? 'Expired ${days.abs()}d ago' : '$days days left',
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          fontWeight:
+                              (days <= 3 || days < 0) ? FontWeight.w800 : FontWeight.w500,
+                          color: (days <= 3 || days < 0)
+                              ? colors.danger
+                              : days <= 7
+                                  ? colors.warning
+                                  : colors.mutedText,
+                        ),
+                      ),
+                    ],
+                  )
+                : Text(shortDate.format(v.submittedAt ?? DateTime.now())),
           ),
           DataCell(
             StatusBadge(
@@ -571,32 +534,32 @@ class _Table extends StatelessWidget {
       minWidth: 1500,
       columnSpacing: 18,
       emptyState: emptyState,
-      columns: const [
-        DataColumn(
+      columns: [
+        const DataColumn(
           columnWidth: FlexColumnWidth(1.25),
           label: Text('RENEWAL ID'),
         ),
-        DataColumn(
+        const DataColumn(
           columnWidth: FlexColumnWidth(1.25),
           label: Text('STALL HOLDER'),
         ),
-        DataColumn(
+        const DataColumn(
           columnWidth: FlexColumnWidth(1.35),
           label: Text('STALL NAME'),
         ),
-        DataColumn(
+        const DataColumn(
           columnWidth: FlexColumnWidth(0.95),
           label: Text('CATEGORY'),
         ),
         DataColumn(
-          columnWidth: FlexColumnWidth(1.25),
-          label: Text('EXPIRY DATE'),
+          columnWidth: const FlexColumnWidth(1.25),
+          label: Text(history ? 'EXPIRY DATE' : 'DATE SUBMITTED'),
         ),
-        DataColumn(
+        const DataColumn(
           columnWidth: FlexColumnWidth(1.75),
           label: Text('RENEWAL STATUS'),
         ),
-        DataColumn(
+        const DataColumn(
           columnWidth: FlexColumnWidth(0.8),
           label: Text('ACTIONS'),
         ),
