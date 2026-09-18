@@ -336,19 +336,27 @@ class _VendorApplicationsPageState
                   trailing: [
                     _filter(
                       status,
-                      history
-                          ? [
-                              'All Statuses',
-                              'Verified',
-                              'Re-Upload Requested',
-                              'Rejected',
-                            ]
-                          : [
-                              'All Statuses',
-                              'Reviewing',
-                            ],
+                      const [
+                        'All Statuses',
+                        'Reviewing',
+                        'Verified',
+                        'Re-Upload Requested',
+                        'Rejected',
+                      ],
                       (value) {
-                        status = value;
+                        setState(() {
+                          status = value;
+                          if (value == 'Verified' ||
+                              value == 'Re-Upload Requested' ||
+                              value == 'Invalid Docs' ||
+                              value == 'Rejected') {
+                            history = true;
+                            _userSelectedTab = true;
+                          } else if (value == 'Reviewing') {
+                            history = false;
+                            _userSelectedTab = true;
+                          }
+                        });
                         _resetTable();
                       },
                     ),

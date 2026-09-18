@@ -3,12 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../core/utils/export/admin_export_service.dart';
-import '../../core/utils/export/module_export_data_builders.dart';
+import '../../core/utils/csv_exporter.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/admin_widgets.dart';
-import '../../core/widgets/document_viewer_modal.dart';
-import '../../data/mock_data.dart';
 import '../../data/repositories/mock_repository.dart';
 import '../../models/admin_models.dart';
 import '../../models/app_models.dart';
@@ -37,32 +34,6 @@ class _AccountsPageState extends ConsumerState<AccountsPage> {
   bool selectedAccountOpened = false;
 
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _openSelectedAccount();
-      }
-    });
-  }
-
-  @override
-  void didUpdateWidget(AccountsPage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.openDetailsOnLoad &&
-        (widget.selectedAccountId != oldWidget.selectedAccountId ||
-            !oldWidget.openDetailsOnLoad ||
-            selectedAccountOpened)) {
-      selectedAccountOpened = false;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _openSelectedAccount();
-        }
-      });
-    }
-  }
-
-  @override
   void dispose() {
     search.dispose();
     tableScrollController.dispose();
@@ -76,14 +47,6 @@ class _AccountsPageState extends ConsumerState<AccountsPage> {
         tableScrollController.jumpTo(0);
       }
     });
-  }
-
-  void _setStatusFilter(String value) {
-    setState(() {
-      status = value;
-      page = 0;
-    });
-    _resetTable();
   }
 
   void _goToPage(int value) {
@@ -100,8 +63,18 @@ class _AccountsPageState extends ConsumerState<AccountsPage> {
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
-    final data = ref.watch(appDataProvider);
+    final data = ref.watch(
+      appDataProvider.select(
+        (s) => (
+          vendors: s.vendors,
+          customers: s.customers,
+          suspensions: s.suspensions
+        ),
+      ),
+    );
+    _openSelectedAccount();
     return ListView(
       padding: EdgeInsets.zero,
       children: [
@@ -110,96 +83,47 @@ class _AccountsPageState extends ConsumerState<AccountsPage> {
           subtitle:
               'Oversee stall holders, customers, and active administrative reports.',
           metrics: [
-            if (!customers) ...[
-              MetricCardData(
-                value: '${data.vendors.length}',
-                label: 'Total Stall Holders',
-                icon: Icons.storefront_rounded,
-                accent: const Color(0xFF3B82F6),
-                onTap: () => _setStatusFilter('All Statuses'),
-              ),
+            if (!customers)
               MetricCardData(
                 value:
                     '${data.vendors.where((v) => v.status == AccountStatus.active).length}',
                 label: 'Active Stall Holders',
-                icon: Icons.check_circle_outline_rounded,
+                icon: Icons.storefront_rounded,
                 accent: const Color(0xFF10B981),
-                onTap: () => _setStatusFilter('Active'),
               ),
-              MetricCardData(
-                value:
-                    '${data.vendors.where((v) => v.status == AccountStatus.suspended).length}',
-                label: 'Suspended Accounts',
-                icon: Icons.pause_circle_outline_rounded,
-                accent: const Color(0xFFF59E0B),
-                onTap: () => _setStatusFilter('Suspended'),
-              ),
-              MetricCardData(
-                value:
-                    '${data.vendors.where((v) => v.status == AccountStatus.blocked).length}',
-                label: 'Blocked Accounts',
-                icon: Icons.block_rounded,
-                accent: const Color(0xFFEF4444),
-                onTap: () => _setStatusFilter('Blocked'),
-              ),
-              MetricCardData(
-                value:
-                    '${data.vendors.where((v) => v.status == AccountStatus.offline).length}',
-                label: 'Offline Accounts',
-                icon: Icons.wifi_off_rounded,
-                accent: const Color(0xFF6B7280),
-                onTap: () => _setStatusFilter('Offline'),
-              ),
-            ] else ...[
-              MetricCardData(
-                value: '${data.customers.length}',
-                label: 'Total Customers',
-                icon: Icons.people_outline_rounded,
-                accent: const Color(0xFF3B82F6),
-                onTap: () => _setStatusFilter('All Statuses'),
-              ),
+            if (customers)
               MetricCardData(
                 value:
                     '${data.customers.where((c) => c.status == AccountStatus.active).length}',
                 label: 'Active Customers',
-                icon: Icons.check_circle_outline_rounded,
-                accent: const Color(0xFF10B981),
-                onTap: () => _setStatusFilter('Active'),
+                icon: Icons.people_outline_rounded,
+                accent: const Color(0xFF3B82F6),
               ),
-              MetricCardData(
-                value:
-                    '${data.customers.where((c) => c.status == AccountStatus.suspended).length}',
-                label: 'Suspended Accounts',
-                icon: Icons.pause_circle_outline_rounded,
-                accent: const Color(0xFFF59E0B),
-                onTap: () => _setStatusFilter('Suspended'),
-              ),
-              MetricCardData(
-                value:
-                    '${data.customers.where((c) => c.status == AccountStatus.blocked).length}',
-                label: 'Blocked Accounts',
-                icon: Icons.block_rounded,
-                accent: const Color(0xFFEF4444),
-                onTap: () => _setStatusFilter('Blocked'),
-              ),
-            ],
+            MetricCardData(
+              value:
+                  '${data.vendors.where((v) => v.status == AccountStatus.suspended).length + data.customers.where((c) => c.status == AccountStatus.suspended).length}',
+              label: 'Suspended Accounts',
+              icon: Icons.pause_circle_outline_rounded,
+              accent: const Color(0xFFF59E0B),
+            ),
+            MetricCardData(
+              value:
+                  '${data.vendors.where((v) => v.status == AccountStatus.blocked).length + data.customers.where((c) => c.status == AccountStatus.blocked).length}',
+              label: 'Blocked Accounts',
+              icon: Icons.block_rounded,
+              accent: const Color(0xFFEF4444),
+            ),
           ],
           tabs: _Tabs(
             selected: customers,
             onChanged: (value) {
               customers = value;
-              status = 'All Statuses';
               _resetTable();
             },
           ),
         ),
         Padding(
-          padding: EdgeInsets.fromLTRB(
-            Responsive.horizontalPadding(context),
-            26,
-            Responsive.horizontalPadding(context),
-            36,
-          ),
+          padding: const EdgeInsets.fromLTRB(36, 26, 36, 36),
           child: customers
               ? _customerPanel(data.customers)
               : _vendorPanel(data.vendors),
@@ -215,24 +139,26 @@ class _AccountsPageState extends ConsumerState<AccountsPage> {
       return;
     }
     selectedAccountOpened = true;
-    if (!mounted) return;
-    final latest = ref.read(appDataProvider);
-    final vendor = latest.vendors.cast<Vendor?>().firstWhere(
-          (item) => item?.id == widget.selectedAccountId,
-          orElse: () => null,
-        );
-    if (vendor != null) {
-      showAccountDialog(context, ref, vendor: vendor);
-      return;
-    }
-    final customer = latest.customers.cast<Customer?>().firstWhere(
-          (item) => item?.id == widget.selectedAccountId,
-          orElse: () => null,
-        );
-    if (customer != null) {
-      setState(() => customers = true);
-      showAccountDialog(context, ref, customer: customer);
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final latest = ref.read(appDataProvider);
+      final vendor = latest.vendors.cast<Vendor?>().firstWhere(
+            (item) => item?.id == widget.selectedAccountId,
+            orElse: () => null,
+          );
+      if (vendor != null) {
+        showAccountDialog(context, ref, vendor: vendor);
+        return;
+      }
+      final customer = latest.customers.cast<Customer?>().firstWhere(
+            (item) => item?.id == widget.selectedAccountId,
+            orElse: () => null,
+          );
+      if (customer != null) {
+        setState(() => customers = true);
+        showAccountDialog(context, ref, customer: customer);
+      }
+    });
   }
 
   List<Vendor> get filteredVendors => ref
@@ -264,14 +190,10 @@ class _AccountsPageState extends ConsumerState<AccountsPage> {
   Widget _vendorPanel(List<Vendor> values) {
     const categories = [
       'All Categories',
-      'Fresh Fish',
-      'Dried Fish',
-      'Meat',
-      'Chicken',
       'Fruits',
       'Vegetables',
-      'Maritatas',
-      'Sari-Sari',
+      'Meat',
+      'Fish',
     ];
     final visible = values
         .where(
@@ -320,19 +242,10 @@ class _AccountsPageState extends ConsumerState<AccountsPage> {
                 stallCategory = value;
                 _resetTable();
               }),
-              ExportButton(
-                onExportPdf: () => _exportAccounts(
-                  allVendors: values,
-                  filteredVendors: visible,
-                  isCustomers: false,
-                  format: ExportFormat.pdf,
-                ),
-                onExportExcel: () => _exportAccounts(
-                  allVendors: values,
-                  filteredVendors: visible,
-                  isCustomers: false,
-                  format: ExportFormat.excel,
-                ),
+              FilterButton(
+                label: 'Export',
+                icon: Icons.download_outlined,
+                onTap: () => _export(visible, 'vendors'),
               ),
             ],
           ),
@@ -394,19 +307,10 @@ class _AccountsPageState extends ConsumerState<AccountsPage> {
                 status = v;
                 _resetTable();
               }),
-              ExportButton(
-                onExportPdf: () => _exportAccounts(
-                  allCustomers: values,
-                  filteredCustomers: visible,
-                  isCustomers: true,
-                  format: ExportFormat.pdf,
-                ),
-                onExportExcel: () => _exportAccounts(
-                  allCustomers: values,
-                  filteredCustomers: visible,
-                  isCustomers: true,
-                  format: ExportFormat.excel,
-                ),
+              FilterButton(
+                label: 'Export',
+                icon: Icons.download_outlined,
+                onTap: () => _export(visible, 'customers'),
               ),
             ],
           ),
@@ -445,40 +349,17 @@ class _AccountsPageState extends ConsumerState<AccountsPage> {
         onSelected: onChanged,
       );
 
-  Future<void> _exportAccounts({
-    List<Vendor>? allVendors,
-    List<Vendor>? filteredVendors,
-    List<Customer>? allCustomers,
-    List<Customer>? filteredCustomers,
-    required bool isCustomers,
-    required ExportFormat format,
-  }) async {
-    final filterLabels = <String>[];
-    if (search.text.trim().isNotEmpty) {
-      filterLabels.add('Search: "${search.text.trim()}"');
-    }
-    filterLabels.add(isCustomers ? 'Customers' : 'Stall Holders');
-    filterLabels.add(status);
-    if (!isCustomers) filterLabels.add(stallCategory);
-
-    final doc = isCustomers
-        ? AccountsExportData.buildCustomers(
-            allCustomers: allCustomers ?? [],
-            filteredCustomers: filteredCustomers ?? [],
-            activeFilters: filterLabels.join(' | '),
-          )
-        : AccountsExportData.buildStallHolders(
-            allVendors: allVendors ?? [],
-            filteredVendors: filteredVendors ?? [],
-            activeFilters: filterLabels.join(' | '),
-          );
-
-    await AdminExportService.export(
-      context: context,
-      ref: ref,
-      doc: doc,
-      format: format,
-    );
+  void _export(List<dynamic> values, String name) {
+    final csv = buildCsv([
+      ['ID', 'Name', 'Email', 'Status'],
+      ...values.map(
+        (item) => [item.id, item.name, item.email, enumLabel(item.status)],
+      ),
+    ]);
+    downloadCsv(csv, 'palengkego-$name.csv');
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('CSV export prepared.')));
   }
 }
 
@@ -540,33 +421,24 @@ class _VendorTable extends StatelessWidget {
                   children: [
                     AvatarCircle(name: vendor.name, size: 32),
                     const SizedBox(width: 9),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            vendor.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          vendor.name,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
                           ),
-                          Text(
-                            vendor.email,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 9),
-                          ),
-                        ],
-                      ),
+                        ),
+                        Text(vendor.email, style: const TextStyle(fontSize: 9)),
+                      ],
                     ),
                   ],
                 ),
               ),
-              DataCell(CategoryBadge(category: vendor.stallType)),
+              DataCell(Text(vendor.stallType)),
               DataCell(Text(shortDate.format(vendor.registeredAt))),
               DataCell(
                 StatusBadge(
@@ -579,10 +451,9 @@ class _VendorTable extends StatelessWidget {
                 ),
               ),
               DataCell(
-                TableActionIconButton(
-                  icon: Icons.open_in_new_rounded,
-                  tooltip: 'Open account details',
+                IconButton(
                   onPressed: () => onOpen(vendor),
+                  icon: const Icon(Icons.open_in_new_rounded, size: 15),
                 ),
               ),
             ],
@@ -607,7 +478,7 @@ class _VendorTable extends StatelessWidget {
         label: Text('ACCOUNT STATUS'),
       ),
       DataColumn(
-        columnWidth: FlexColumnWidth(1.0),
+        columnWidth: FlexColumnWidth(.7),
         label: Text('ACTIONS'),
       ),
     ];
@@ -642,28 +513,22 @@ class _CustomerTable extends StatelessWidget {
                   children: [
                     AvatarCircle(name: customer.name, size: 32),
                     const SizedBox(width: 9),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            customer.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          customer.name,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
                           ),
-                          Text(
-                            customer.email,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 9),
-                          ),
-                        ],
-                      ),
+                        ),
+                        Text(
+                          customer.email,
+                          style: const TextStyle(fontSize: 9),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -683,16 +548,14 @@ class _CustomerTable extends StatelessWidget {
                   label: enumLabel(customer.status),
                   kind: customer.status == AccountStatus.active
                       ? BadgeKind.success
-                      : customer.status == AccountStatus.suspended
-                          ? BadgeKind.warning
-                          : BadgeKind.danger,
+                      : BadgeKind.danger,
                 ),
               ),
               DataCell(
-                TableActionIconButton(
-                  icon: Icons.open_in_new_rounded,
-                  tooltip: 'Open account details',
+                IconButton(
                   onPressed: () => onOpen(customer),
+                  icon: const Icon(Icons.open_in_new_rounded, size: 15),
+                  tooltip: 'Open account details',
                 ),
               ),
             ],
@@ -721,7 +584,7 @@ class _CustomerTable extends StatelessWidget {
           label: Text('ACCOUNT STATUS'),
         ),
         DataColumn(
-          columnWidth: FlexColumnWidth(1.0),
+          columnWidth: FlexColumnWidth(.7),
           label: Text('ACTIONS'),
         ),
       ],
@@ -818,30 +681,22 @@ Future<void> showAccountDialog(
                           onUnblock: account.status == AccountStatus.blocked
                               ? (notes) => update(notes, AccountStatus.active)
                               : null,
-                          onLift: account.status == AccountStatus.suspended
-                              ? (notes) async {
-                                  if (account.suspension != null &&
-                                      account.suspension!.liftedAt == null) {
-                                    await ref
-                                        .read(appDataProvider.notifier)
-                                        .liftSuspension(account.suspension!.id);
-                                  } else {
-                                    await update(notes, AccountStatus.active);
-                                  }
-                                }
+                          onLift: account.suspension != null &&
+                                  account.suspension!.liftedAt == null
+                              ? (_) => ref
+                                  .read(appDataProvider.notifier)
+                                  .liftSuspension(account.suspension!.id)
                               : null,
-                          onSuspend: (account.status == AccountStatus.blocked ||
-                                  account.status == AccountStatus.suspended)
-                              ? null
-                              : () => showSuspensionDialog(
+                          onSuspend: account.status != AccountStatus.blocked &&
+                                  (account.suspension == null ||
+                                      account.suspension!.liftedAt != null)
+                              ? () => showSuspensionDialog(
                                     context,
                                     ref,
                                     accountId: account.id,
                                     accountName: account.name,
                                     accountType: account.accountType,
-                                  ),
-                          onBlock: account.status != AccountStatus.blocked
-                              ? (notes) => update(notes, AccountStatus.blocked)
+                                  )
                               : null,
                         ),
                       ),
@@ -876,68 +731,27 @@ Future<bool?> showSuspensionDialog(
   required String accountId,
   required String accountName,
   required String accountType,
-}) {
-  return showDialog<bool>(
-    context: context,
-    builder: (dialogContext) => _SuspensionDialog(
-      ref: ref,
-      accountId: accountId,
-      accountName: accountName,
-      accountType: accountType,
-    ),
-  );
-}
+}) async {
+  final reason = TextEditingController();
+  final note = TextEditingController();
+  var startDate = DateTime.now();
+  var endDate = DateTime.now().add(const Duration(days: 7));
+  var notifyUser = true;
+  var saving = false;
 
-class _SuspensionDialog extends StatefulWidget {
-  const _SuspensionDialog({
-    required this.ref,
-    required this.accountId,
-    required this.accountName,
-    required this.accountType,
-  });
-
-  final WidgetRef ref;
-  final String accountId;
-  final String accountName;
-  final String accountType;
-
-  @override
-  State<_SuspensionDialog> createState() => _SuspensionDialogState();
-}
-
-class _SuspensionDialogState extends State<_SuspensionDialog> {
-  late final TextEditingController reason;
-  late final TextEditingController note;
-  late DateTime startDate;
-  late DateTime endDate;
-  bool notifyUser = true;
-  bool saving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    reason = TextEditingController();
-    note = TextEditingController();
-    startDate = DateTime.now();
-    endDate = DateTime.now().add(const Duration(days: 7));
-  }
-
-  @override
-  void dispose() {
-    reason.dispose();
-    note.dispose();
-    super.dispose();
-  }
-
-  Future<void> _pickDate(bool start) async {
+  Future<void> pickDate(
+    BuildContext dialogContext,
+    bool start,
+    StateSetter setDialogState,
+  ) async {
     final selected = await showDatePicker(
-      context: context,
+      context: dialogContext,
       initialDate: start ? startDate : endDate,
-      firstDate: start ? DateUtils.dateOnly(startDate) : startDate,
+      firstDate: start ? DateTime.now() : startDate,
       lastDate: DateTime.now().add(const Duration(days: 3650)),
     );
     if (selected == null) return;
-    setState(() {
+    setDialogState(() {
       if (start) {
         startDate = selected;
         if (!endDate.isAfter(startDate)) {
@@ -949,118 +763,125 @@ class _SuspensionDialogState extends State<_SuspensionDialog> {
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Temporarily suspend account'),
-      content: SizedBox(
-        width: 460,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                widget.accountName,
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: reason,
-                autofocus: true,
-                maxLength: 120,
-                decoration: const InputDecoration(
-                  labelText: 'Reason *',
-                  hintText: 'Policy violation, unpaid fees, etc.',
-                ),
-              ),
-              TextField(
-                controller: note,
-                maxLines: 3,
-                maxLength: 300,
-                decoration: const InputDecoration(
-                  labelText: 'Internal note',
-                  hintText: 'Optional details for the audit trail',
-                ),
-              ),
-              const SizedBox(height: 8),
-              Row(
+  try {
+    return await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Temporarily suspend account'),
+          content: SizedBox(
+            width: 460,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: _dateButton(
-                      context,
-                      'Starts',
-                      startDate,
-                      () => _pickDate(true),
+                  Text(
+                    accountName,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: reason,
+                    autofocus: true,
+                    maxLength: 120,
+                    decoration: const InputDecoration(
+                      labelText: 'Reason *',
+                      hintText: 'Policy violation, unpaid fees, etc.',
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _dateButton(
-                      context,
-                      'Ends',
-                      endDate,
-                      () => _pickDate(false),
+                  TextField(
+                    controller: note,
+                    maxLines: 3,
+                    maxLength: 300,
+                    decoration: const InputDecoration(
+                      labelText: 'Internal note',
+                      hintText: 'Optional details for the audit trail',
                     ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _dateButton(
+                          dialogContext,
+                          'Starts',
+                          startDate,
+                          () => pickDate(dialogContext, true, setDialogState),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _dateButton(
+                          dialogContext,
+                          'Ends',
+                          endDate,
+                          () => pickDate(dialogContext, false, setDialogState),
+                        ),
+                      ),
+                    ],
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: notifyUser,
+                    onChanged: (value) =>
+                        setDialogState(() => notifyUser = value ?? true),
+                    title: const Text('Notify the account holder'),
+                    subtitle: const Text(
+                        'Delivery is recorded locally in demo mode.'),
                   ),
                 ],
               ),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                value: notifyUser,
-                onChanged: (value) =>
-                    setState(() => notifyUser = value ?? true),
-                title: const Text('Notify the account holder'),
-                subtitle: const Text(
-                    'Delivery is recorded locally in demo mode.'),
-              ),
-            ],
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: saving ? null : () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: saving
+                  ? null
+                  : () async {
+                      if (reason.text.trim().isEmpty) {
+                        ScaffoldMessenger.of(dialogContext).showSnackBar(
+                          const SnackBar(
+                              content: Text('Enter a suspension reason.')),
+                        );
+                        return;
+                      }
+                      setDialogState(() => saving = true);
+                      final error = await ref
+                          .read(appDataProvider.notifier)
+                          .createSuspension(
+                            accountId: accountId,
+                            accountName: accountName,
+                            accountType: accountType,
+                            reason: reason.text,
+                            startDate: startDate,
+                            endDate: endDate,
+                            note: note.text,
+                            notifyUser: notifyUser,
+                          );
+                      if (!dialogContext.mounted) return;
+                      if (error != null) {
+                        setDialogState(() => saving = false);
+                        ScaffoldMessenger.of(dialogContext).showSnackBar(
+                          SnackBar(content: Text(error)),
+                        );
+                        return;
+                      }
+                      Navigator.pop(dialogContext, true);
+                    },
+              child: const Text('Suspend account'),
+            ),
+          ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: saving ? null : () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: saving
-              ? null
-              : () async {
-                  if (reason.text.trim().isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text('Enter a suspension reason.')),
-                    );
-                    return;
-                  }
-                  setState(() => saving = true);
-                  final error = await widget.ref
-                      .read(appDataProvider.notifier)
-                      .createSuspension(
-                        accountId: widget.accountId,
-                        accountName: widget.accountName,
-                        accountType: widget.accountType,
-                        reason: reason.text,
-                        startDate: startDate,
-                        endDate: endDate,
-                        note: note.text,
-                        notifyUser: notifyUser,
-                      );
-                  if (!mounted) return;
-                  if (error != null) {
-                    setState(() => saving = false);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(error)),
-                    );
-                    return;
-                  }
-                  Navigator.pop(context, true);
-                },
-          child: const Text('Suspend account'),
-        ),
-      ],
     );
+  } finally {
+    reason.dispose();
+    note.dispose();
   }
 }
 
@@ -1407,48 +1228,27 @@ class _AccountDetailsData {
   factory _AccountDetailsData.fromCustomer(
     Customer customer, {
     Suspension? suspension,
-  }) {
-    final nagaBarangays = [
-      'Brgy. Peñafrancia, Naga City',
-      'Brgy. Dayangdang, Naga City',
-      'Brgy. Triangulo, Naga City',
-      'Brgy. Concepcion Grande, Naga City',
-      'Brgy. Tinago, Naga City',
-      'Brgy. Mabolo, Naga City',
-      'Brgy. Sabang, Naga City',
-      'Brgy. San Felipe, Naga City',
-      'Brgy. Cararayan, Naga City',
-      'Brgy. Pacol, Naga City',
-    ];
-    final hash = customer.id.hashCode.abs();
-    final ordersCount = customer.transactions > 0
-        ? customer.transactions
-        : (6 + (hash % 18));
-    final totalSpent = ordersCount * 225.50;
-    final phone = '+63 917 ${555 + (hash % 400)} ${1000 + (hash % 8999)}';
-    final residence = nagaBarangays[hash % nagaBarangays.length];
-
-    return _AccountDetailsData(
-      id: customer.id,
-      name: customer.name,
-      email: customer.email,
-      stallType: 'Customer Account',
-      registeredAt: customer.registeredAt,
-      status: customer.status,
-      location: 'Customer Account',
-      orders: ordersCount,
-      transactions: totalSpent,
-      phone: phone,
-      residence: residence,
-      accountType: 'Customer',
-      administrativeNotes: customer.administrativeNotes,
-      suspension: suspension,
-      blockedReason: customer.blockedReason,
-      blockedFromReportId: customer.blockedFromReportId,
-      blockedAt: customer.blockedAt,
-      blockedBy: customer.blockedBy,
-    );
-  }
+  }) =>
+      _AccountDetailsData(
+        id: customer.id,
+        name: customer.name,
+        email: customer.email,
+        stallType: 'Customer Account',
+        registeredAt: customer.registeredAt,
+        status: customer.status,
+        location: 'Customer account',
+        orders: 0,
+        transactions: customer.transactions.toDouble(),
+        phone: 'Not provided',
+        residence: 'Not provided',
+        accountType: 'Customer',
+        administrativeNotes: customer.administrativeNotes,
+        suspension: suspension,
+        blockedReason: customer.blockedReason,
+        blockedFromReportId: customer.blockedFromReportId,
+        blockedAt: customer.blockedAt,
+        blockedBy: customer.blockedBy,
+      );
 
   final String id;
   final String name;
@@ -1478,7 +1278,6 @@ class _AccountDetailsDialog extends ConsumerStatefulWidget {
     this.onUnblock,
     this.onLift,
     this.onSuspend,
-    this.onBlock,
   });
 
   final _AccountDetailsData account;
@@ -1487,7 +1286,6 @@ class _AccountDetailsDialog extends ConsumerStatefulWidget {
   final Future<void> Function(String notes)? onUnblock;
   final Future<void> Function(String notes)? onLift;
   final Future<bool?> Function()? onSuspend;
-  final Future<void> Function(String reason)? onBlock;
 
   @override
   ConsumerState<_AccountDetailsDialog> createState() =>
@@ -1502,11 +1300,10 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
   bool unblocking = false;
   bool lifting = false;
   bool suspending = false;
-  bool blocking = false;
   bool closePromptOpen = false;
 
   bool get dirty => notes.text != widget.account.administrativeNotes;
-  bool get busy => saving || unblocking || lifting || suspending || blocking;
+  bool get busy => saving || unblocking || lifting || suspending;
 
   @override
   void initState() {
@@ -1681,77 +1478,6 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
     }
   }
 
-  Future<void> _block() async {
-    if (busy || widget.onBlock == null) return;
-    final reasonController = TextEditingController();
-    final confirmed = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Block Account?'),
-        content: SizedBox(
-          width: 420,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Block access for ${widget.account.name}? The account status will '
-                'change to Blocked.',
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: reasonController,
-                autofocus: true,
-                minLines: 2,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Blocking Reason *',
-                  hintText: 'Enter reason for blocking',
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, null),
-            child: const Text('Cancel'),
-          ),
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor: semanticColors(context).danger,
-            ),
-            onPressed: () {
-              final reason = reasonController.text.trim();
-              if (reason.isEmpty) return;
-              Navigator.pop(dialogContext, reason);
-            },
-            icon: const Icon(Icons.block_outlined, size: 17),
-            label: const Text('Block Account'),
-          ),
-        ],
-      ),
-    );
-    reasonController.dispose();
-    if (confirmed == null || confirmed.isEmpty || !mounted) return;
-
-    setState(() => blocking = true);
-    try {
-      await widget.onBlock!(confirmed);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${widget.account.name} has been blocked.')),
-      );
-      Navigator.of(context).pop();
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unable to block account: $error')),
-      );
-      setState(() => blocking = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final colors = semanticColors(context);
@@ -1777,31 +1503,6 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _summary(context),
-                      if (widget.account.accountType == 'Stall Holder') ...[
-                        const SizedBox(height: 14),
-                        OutlinedButton.icon(
-                          onPressed: () {
-                            showDialog<void>(
-                              context: context,
-                              builder: (dialogContext) => DocumentViewerModal(
-                                documents: seedKycDocuments(
-                                  widget.account.registeredAt,
-                                ),
-                                applicantName: widget.account.name,
-                                stallName: widget.account.stallType,
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.description_outlined, size: 17),
-                          label: const Text('View Submitted KYC Documents'),
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size.fromHeight(38),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                        ),
-                      ],
                       if (widget.account.status == AccountStatus.suspended &&
                           widget.account.suspension != null) ...[
                         const SizedBox(height: 18),
@@ -1852,39 +1553,11 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
                       const SizedBox(height: 20),
                       _sectionTitle('RECENT ACTIVITY'),
                       const SizedBox(height: 10),
-                      if (widget.account.accountType == 'Customer') ...[
-                        _activity(
-                          context,
-                          'Placed Order #ORD-${8400 + (widget.account.id.hashCode.abs() % 500)}',
-                          'Today at 10:15 AM',
-                        ),
-                        _activity(
-                          context,
-                          'Completed order payment & rated stall 5 stars',
-                          'Yesterday at 3:45 PM',
-                        ),
-                        _activity(
-                          context,
-                          'Updated profile & primary delivery address',
-                          'Jan 12, 2024',
-                        ),
-                      ] else ...[
-                        _activity(
-                          context,
-                          'Renewed Stall Permit #44',
-                          'Today at 11:42 AM',
-                        ),
-                        _activity(
-                          context,
-                          'Processed monthly maintenance fee',
-                          'Yesterday at 4:15 PM',
-                        ),
-                        _activity(
-                          context,
-                          'Updated profile',
-                          'Jan 12, 2024',
-                        ),
-                      ],
+                      _activity(context, 'Renewed Stall Permit #44',
+                          'Today at 11:42 AM'),
+                      _activity(context, 'Processed monthly maintenance fee',
+                          'Yesterday at 4:15 PM'),
+                      _activity(context, 'Updated profile', 'Jan 12, 2024'),
                       const SizedBox(height: 11),
                       _violationCard(context),
                       const SizedBox(height: 20),
@@ -1993,17 +1666,12 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
           final metadata = Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (CategoryColors.isCategory(widget.account.stallType)) ...[
-                CategoryBadge(category: widget.account.stallType),
-                const SizedBox(height: 6),
-              ] else ...[
-                Text(
-                  widget.account.stallType,
-                  style: GoogleFonts.inter(
-                      fontSize: 12, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 4),
-              ],
+              Text(
+                widget.account.stallType,
+                style: GoogleFonts.inter(
+                    fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
               Text(
                 widget.account.location,
                 style: GoogleFonts.inter(
@@ -2293,115 +1961,6 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
 
   Widget _violationCard(BuildContext context) {
     final colors = semanticColors(context);
-    final isCustomer = widget.account.accountType == 'Customer';
-    final isBlocked = widget.account.status == AccountStatus.blocked;
-    final isSuspended = widget.account.status == AccountStatus.suspended;
-
-    if (isCustomer) {
-      if (isBlocked || isSuspended) {
-        final reason = widget.account.blockedReason ??
-            widget.account.suspension?.reason ??
-            'Account flagged for policy violation.';
-        return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: colors.dangerContainer.withValues(alpha: .55),
-            borderRadius: BorderRadius.circular(11),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Policy Violation Record',
-                style: GoogleFonts.inter(
-                  color: colors.danger,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 9),
-              Text(
-                isBlocked ? 'Account Restricted' : 'Account Suspension Notice',
-                style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                reason,
-                style: GoogleFonts.inter(fontSize: 10),
-              ),
-            ],
-          ),
-        );
-      }
-
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: colors.successContainer.withValues(alpha: .35),
-          borderRadius: BorderRadius.circular(11),
-          border: Border.all(color: colors.success.withValues(alpha: .2)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Account Compliance Record',
-              style: GoogleFonts.inter(
-                color: colors.success,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'No customer violations or disputed charges recorded in the last 24 months.',
-              style: GoogleFonts.inter(fontSize: 10),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // Stall Holder violation card
-    if (isBlocked || isSuspended) {
-      final reason = widget.account.blockedReason ??
-          widget.account.suspension?.reason ??
-          'Market policy non-compliance';
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: colors.dangerContainer.withValues(alpha: .55),
-          borderRadius: BorderRadius.circular(11),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Violation History',
-              style: GoogleFonts.inter(
-                color: colors.danger,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 9),
-            Text(
-              'Market Policy Violation',
-              style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              reason,
-              style: GoogleFonts.inter(fontSize: 10),
-            ),
-          ],
-        ),
-      );
-    }
-
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
@@ -2445,119 +2004,88 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
   }
 
   Widget _footer(BuildContext context) {
-    final actions = <Widget>[];
-
-    if (widget.onUnblock != null) {
-      actions.add(
-        OutlinedButton.icon(
-          onPressed: busy ? null : _unblock,
-          style: OutlinedButton.styleFrom(
-            foregroundColor: semanticColors(context).success,
+    final canUnblock = widget.onUnblock != null;
+    final canLift = widget.onLift != null;
+    final canSuspend = widget.onSuspend != null;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 9, 22, 15),
+      child: Row(
+        children: [
+          Expanded(
+            child: canUnblock
+                ? OutlinedButton.icon(
+                    onPressed: busy ? null : _unblock,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: semanticColors(context).success,
+                    ),
+                    icon: unblocking
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.lock_open_rounded, size: 17),
+                    label: Text(
+                      unblocking ? 'Unblocking...' : 'Unblock Account',
+                    ),
+                  )
+                : canLift
+                    ? OutlinedButton.icon(
+                        onPressed: busy ? null : _liftSuspension,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: semanticColors(context).warning,
+                        ),
+                        icon: lifting
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.lock_open_rounded, size: 17),
+                        label: Text(
+                          lifting ? 'Lifting...' : 'Lift Suspension',
+                        ),
+                      )
+                    : canSuspend
+                        ? OutlinedButton.icon(
+                            onPressed: busy ? null : _suspend,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: semanticColors(context).warning,
+                            ),
+                            icon: suspending
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(
+                                    Icons.pause_circle_outline,
+                                    size: 17,
+                                  ),
+                            label: Text(
+                              suspending ? 'Suspending...' : 'Suspend Account',
+                            ),
+                          )
+                        : const SizedBox.shrink(),
           ),
-          icon: unblocking
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.lock_open_rounded, size: 17),
-          label: Text(unblocking ? 'Unblocking...' : 'Unblock Account'),
-        ),
-      );
-    } else if (widget.onLift != null) {
-      actions.add(
-        OutlinedButton.icon(
-          onPressed: busy ? null : _liftSuspension,
-          style: OutlinedButton.styleFrom(
-            foregroundColor: semanticColors(context).warning,
+          const SizedBox(width: 12),
+          Expanded(
+            child: FilledButton(
+              onPressed: dirty && !busy ? _save : null,
+              child: saving
+                  ? const SizedBox(
+                      width: 17,
+                      height: 17,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Save Changes'),
+            ),
           ),
-          icon: lifting
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.lock_open_rounded, size: 17),
-          label: Text(lifting ? 'Lifting...' : 'Lift Suspension'),
-        ),
-      );
-    } else if (widget.onSuspend != null) {
-      actions.add(
-        OutlinedButton.icon(
-          onPressed: busy ? null : _suspend,
-          style: OutlinedButton.styleFrom(
-            foregroundColor: semanticColors(context).warning,
-          ),
-          icon: suspending
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.pause_circle_outline, size: 17),
-          label: Text(suspending ? 'Suspending...' : 'Suspend Account'),
-        ),
-      );
-    }
-
-    if (widget.onBlock != null) {
-      actions.add(
-        OutlinedButton.icon(
-          onPressed: busy ? null : _block,
-          style: OutlinedButton.styleFrom(
-            foregroundColor: semanticColors(context).danger,
-          ),
-          icon: blocking
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.block_outlined, size: 17),
-          label: Text(blocking ? 'Blocking...' : 'Block Account'),
-        ),
-      );
-    }
-
-    actions.add(
-      FilledButton(
-        onPressed: dirty && !busy ? _save : null,
-        child: saving
-            ? const SizedBox(
-                width: 17,
-                height: 17,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Text('Save Changes'),
+        ],
       ),
-    );
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isNarrow = constraints.maxWidth < 500;
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(22, 9, 22, 15),
-          child: isNarrow
-              ? Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (int i = 0; i < actions.length; i++) ...[
-                      if (i > 0) const SizedBox(height: 8),
-                      actions[i],
-                    ],
-                  ],
-                )
-              : Row(
-                  children: [
-                    for (int i = 0; i < actions.length; i++) ...[
-                      if (i > 0) const SizedBox(width: 10),
-                      Expanded(child: actions[i]),
-                    ],
-                  ],
-                ),
-        );
-      },
     );
   }
 }

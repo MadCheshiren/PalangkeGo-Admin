@@ -1410,20 +1410,20 @@ class ApplicationStatusBadge extends StatelessWidget {
     final label = switch (status) {
       ApplicationStatus.verified => 'Verified',
       ApplicationStatus.reviewing => 'Reviewing',
-      ApplicationStatus.invalidDocs => 'Invalid Docs',
-      ApplicationStatus.rejected => 'Invalid Docs',
+      ApplicationStatus.invalidDocs => 'Re-Upload Requested',
+      ApplicationStatus.rejected => 'Rejected',
     };
     final kind = switch (status) {
       ApplicationStatus.verified => BadgeKind.success,
       ApplicationStatus.reviewing => BadgeKind.info,
-      ApplicationStatus.invalidDocs => BadgeKind.danger,
+      ApplicationStatus.invalidDocs => BadgeKind.warning,
       ApplicationStatus.rejected => BadgeKind.danger,
     };
     final icon = switch (status) {
       ApplicationStatus.verified => Icons.verified_rounded,
       ApplicationStatus.reviewing => Icons.pie_chart_outline_rounded,
-      ApplicationStatus.invalidDocs => Icons.error_outline_rounded,
-      ApplicationStatus.rejected => Icons.error_outline_rounded,
+      ApplicationStatus.invalidDocs => Icons.document_scanner_outlined,
+      ApplicationStatus.rejected => Icons.cancel_outlined,
     };
     final color = switch (kind) {
       BadgeKind.success => colors.success,

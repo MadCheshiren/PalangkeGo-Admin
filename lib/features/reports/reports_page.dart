@@ -3,8 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/theme_controller.dart';
-import '../../core/utils/export/admin_export_service.dart';
-import '../../core/utils/export/module_export_data_builders.dart';
+import '../../core/utils/csv_exporter.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/admin_shell.dart';
 import '../../core/widgets/admin_widgets.dart';
@@ -48,13 +47,11 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
   }
 
   String? _newestReportId(List<Report> values) {
-    final pending = values
-        .where((item) => item.status == ReportStatus.pending)
-        .toList();
+    final pending =
+        values.where((item) => item.status == ReportStatus.pending).toList();
     if (pending.isEmpty) {
-      final active = values
-          .where((item) => item.status != ReportStatus.resolved)
-          .toList();
+      final active =
+          values.where((item) => item.status != ReportStatus.resolved).toList();
       if (active.isEmpty) return null;
       var newest = active.first;
       for (final item in active.skip(1)) {
@@ -114,7 +111,7 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
     final selectedCategory = stallCategory;
     final categories = <String>{
       'All Categories',
-      ...reports.map((item) => item.category ?? 'FRESH FISH'),
+      ...reports.map((item) => item.category ?? 'FRUITS'),
     }.toList()
       ..sort();
     categories
@@ -127,7 +124,8 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
                   ? item.status == ReportStatus.resolved
                   : item.status != ReportStatus.resolved) &&
               (targetType == 'All Types' ||
-                  (targetType == 'Stall Holders' && _isStallHolderReport(item)) ||
+                  (targetType == 'Stall Holders' &&
+                      _isStallHolderReport(item)) ||
                   (targetType == 'Customers' && _isCustomerReport(item))) &&
               (search.text.trim().isEmpty ||
                   '${item.id} ${item.accountIssue} ${item.submittedBy} ${item.reason}'
@@ -135,7 +133,7 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
                       .contains(search.text.trim().toLowerCase())) &&
               (status == 'All Statuses' || enumLabel(item.status) == status) &&
               (selectedCategory == 'All Categories' ||
-                  (item.category ?? 'FRESH FISH') == selectedCategory),
+                  (item.category ?? 'FRUITS') == selectedCategory),
         )
         .toList()
       ..sort((a, b) => b.date.compareTo(a.date));
@@ -176,12 +174,20 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
             ? reports.where(_isStallHolderReport).toList()
             : reports.where(_isCustomerReport).toList();
 
-    final suspendedCount = targetType == 'All Types'
-        ? appData.vendors.where((item) => item.status == AccountStatus.suspended).length +
-            appData.customers.where((item) => item.status == AccountStatus.suspended).length
+    final blockedCount = targetType == 'All Types'
+        ? appData.vendors
+                .where((item) => item.status == AccountStatus.blocked)
+                .length +
+            appData.customers
+                .where((item) => item.status == AccountStatus.blocked)
+                .length
         : targetType == 'Stall Holders'
-            ? appData.vendors.where((item) => item.status == AccountStatus.suspended).length
-            : appData.customers.where((item) => item.status == AccountStatus.suspended).length;
+            ? appData.vendors
+                .where((item) => item.status == AccountStatus.blocked)
+                .length
+            : appData.customers
+                .where((item) => item.status == AccountStatus.blocked)
+                .length;
 
     return ListView(
       padding: EdgeInsets.zero,
@@ -204,13 +210,6 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
               label: 'Pending Reports',
               icon: Icons.folder_copy_outlined,
               accent: const Color(0xFFEF4444),
-              onTap: () {
-                setState(() {
-                  status = 'Pending';
-                  history = false;
-                });
-                _resetTable();
-              },
             ),
             MetricCardData(
               value:
@@ -218,13 +217,6 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
               label: 'Under Review',
               icon: Icons.visibility_outlined,
               accent: const Color(0xFF3B82F6),
-              onTap: () {
-                setState(() {
-                  status = 'Under Review';
-                  history = false;
-                });
-                _resetTable();
-              },
             ),
             MetricCardData(
               value:
@@ -232,44 +224,25 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
               label: 'Resolved',
               icon: Icons.check_circle_outline_rounded,
               accent: const Color(0xFF10B981),
-              onTap: () {
-                setState(() {
-                  status = 'Resolved';
-                  history = true;
-                });
-                _resetTable();
-              },
             ),
             MetricCardData(
-              value: '$suspendedCount',
+              value: '$blockedCount',
               label: targetType == 'Stall Holders'
-                  ? 'Suspended Stall Holders'
+                  ? 'Blocked Stall Holders'
                   : targetType == 'Customers'
-                      ? 'Suspended Customers'
-                      : 'Suspended Accounts',
-              icon: Icons.pause_circle_outline_rounded,
-              accent: const Color(0xFFF59E0B),
-              onTap: () => context.go('/accounts'),
+                      ? 'Blocked Customers'
+                      : 'Blocked Accounts',
+              icon: Icons.block_outlined,
+              accent: const Color(0xFFEF4444),
             ),
           ],
         ),
         Padding(
-          padding: EdgeInsets.fromLTRB(
-            Responsive.horizontalPadding(context),
-            26,
-            Responsive.horizontalPadding(context),
-            36,
-          ),
+          padding: const EdgeInsets.fromLTRB(36, 26, 36, 36),
           child: DataPanel(
             title: history ? 'Resolved Report History' : 'Review Reports',
             headerAction: _ReportViewToggle(
               history: history,
-              reviewCount: filteredForMetrics
-                  .where((item) => item.status != ReportStatus.resolved)
-                  .length,
-              resolvedCount: filteredForMetrics
-                  .where((item) => item.status == ReportStatus.resolved)
-                  .length,
               onChanged: (value) {
                 setState(() {
                   history = value;
@@ -323,17 +296,10 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
                       stallCategory = value;
                       _resetTable();
                     }),
-                    ExportButton(
-                      onExportPdf: () => _exportComplaints(
-                        allReports: reports,
-                        filteredReports: values,
-                        format: ExportFormat.pdf,
-                      ),
-                      onExportExcel: () => _exportComplaints(
-                        allReports: reports,
-                        filteredReports: values,
-                        format: ExportFormat.excel,
-                      ),
+                    FilterButton(
+                      label: 'Export',
+                      icon: Icons.download_outlined,
+                      onTap: () => _export(values),
                     ),
                   ],
                 ),
@@ -394,30 +360,39 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
         onSelected: onChanged,
       );
 
-  Future<void> _exportComplaints({
-    required List<Report> allReports,
-    required List<Report> filteredReports,
-    required ExportFormat format,
-  }) async {
-    final filterLabels = <String>[];
-    if (search.text.trim().isNotEmpty) {
-      filterLabels.add('Search: "${search.text.trim()}"');
-    }
-    filterLabels.add(targetType);
-    filterLabels.add(status);
-    if (stallCategory != 'All Categories') filterLabels.add(stallCategory);
-
-    final doc = ComplaintExportData.build(
-      allReports: allReports,
-      filteredReports: filteredReports,
-      activeFilters: filterLabels.join(' | '),
-    );
-
-    await AdminExportService.export(
-      context: context,
-      ref: ref,
-      doc: doc,
-      format: format,
+  void _export(List<Report> values) {
+    final csv = buildCsv([
+      [
+        'Type',
+        'Account / Issue',
+        'Submitted By',
+        'Reason',
+        'Category',
+        'Date',
+        'Status',
+        'Priority'
+      ],
+      ...values.map(
+        (item) => [
+          item.type == 'Vendor' ? 'Stall Holder' : item.type,
+          item.accountIssue,
+          item.submittedBy,
+          item.reason,
+          item.category ?? 'FRUITS',
+          item.date.toIso8601String(),
+          enumLabel(item.status),
+          enumLabel(item.priority),
+        ],
+      ),
+    ]);
+    final filename = targetType == 'Stall Holders'
+        ? 'palengkego-stall-holder-reports.csv'
+        : targetType == 'Customers'
+            ? 'palengkego-customer-reports.csv'
+            : 'palengkego-reports.csv';
+    downloadCsv(csv, filename);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Reports CSV downloaded.')),
     );
   }
 }
@@ -439,116 +414,140 @@ class _ReportTable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = semanticColors(context);
-    final rows = values
-        .map(
-          (item) {
-            return DataRow(
-              onSelectChanged: (_) => onOpen(item),
-              cells: history
-                  ? [
-                      DataCell(Text(item.type == 'Vendor' ? 'Stall Holder' : item.type)),
-                      DataCell(Text(item.id)),
-                      DataCell(
-                        Text(
-                          item.accountIssue,
-                          style: TextStyle(
-                            color: colors.accent,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
+    final rows = values.map(
+      (item) {
+        final isNew = !history && newReportIds.contains(item.id);
+        return DataRow(
+          color: isNew
+              ? WidgetStateProperty.resolveWith<Color?>((states) {
+                  if (states.contains(WidgetState.hovered)) {
+                    return colors.info.withValues(alpha: 0.13);
+                  }
+                  return colors.info.withValues(alpha: 0.07);
+                })
+              : null,
+          onSelectChanged: (_) => onOpen(item),
+          cells: history
+              ? [
+                  DataCell(
+                      Text(item.type == 'Vendor' ? 'Stall Holder' : item.type)),
+                  DataCell(Text(item.id)),
+                  DataCell(
+                    Text(
+                      item.accountIssue,
+                      style: TextStyle(
+                        color: colors.accent,
+                        fontWeight: FontWeight.w800,
                       ),
-                      DataCell(Text(item.reason)),
-                      DataCell(
-                        StatusBadge(
-                          label: item.decision ?? 'Resolved',
-                          kind: item.decision == 'No Violation'
-                              ? BadgeKind.neutral
-                              : item.decision == 'Account Blocked'
-                                  ? BadgeKind.danger
-                                  : BadgeKind.warning,
-                        ),
-                      ),
-                      DataCell(Text(item.actionTaken ?? 'Resolved')),
-                      DataCell(
-                        Text(
-                          item.resolvedAt == null
-                              ? '—'
-                              : longDate.format(item.resolvedAt!),
-                        ),
-                      ),
-                      DataCell(Text(item.resolvedBy ?? 'Administrator')),
-                    ]
-                  : [
-                      DataCell(
-                        Text(
-                          item.type == 'Vendor' ? 'Stall Holder' : item.type,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      DataCell(
-                        Text(
-                          item.id,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: colors.secondaryText,
-                            fontSize: 11.5,
-                          ),
-                        ),
-                      ),
-                      DataCell(
-                        Text(
-                          item.accountIssue,
-                          style: TextStyle(
-                            color: colors.accent,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      DataCell(Text(item.submittedBy)),
-                      DataCell(Text(item.reason)),
-                      DataCell(
-                        CategoryBadge(
-                          category: item.category ?? 'FRESH FISH',
-                        ),
-                      ),
-                      DataCell(
-                        Text(
-                          '${item.date.month.toString().padLeft(2, '0')}/${item.date.day.toString().padLeft(2, '0')}/${item.date.year}',
-                        ),
-                      ),
-                      DataCell(
-                        StatusBadge(
-                          label: enumLabel(item.status),
-                          kind: item.status == ReportStatus.resolved
-                              ? BadgeKind.success
-                              : item.status == ReportStatus.underReview
-                                  ? BadgeKind.info
-                                  : BadgeKind.danger,
-                        ),
-                      ),
-                      DataCell(
-                        StatusBadge(
-                          label: enumLabel(item.priority).toUpperCase(),
-                          kind: item.priority == Priority.high
+                    ),
+                  ),
+                  DataCell(Text(item.reason)),
+                  DataCell(
+                    StatusBadge(
+                      label: item.decision ?? 'Resolved',
+                      kind: item.decision == 'No Violation'
+                          ? BadgeKind.neutral
+                          : item.decision == 'Account Blocked'
                               ? BadgeKind.danger
-                              : item.priority == Priority.medium
-                                  ? BadgeKind.warning
-                                  : BadgeKind.neutral,
+                              : BadgeKind.warning,
+                    ),
+                  ),
+                  DataCell(Text(item.actionTaken ?? 'Resolved')),
+                  DataCell(
+                    Text(
+                      item.resolvedAt == null
+                          ? '—'
+                          : longDate.format(item.resolvedAt!),
+                    ),
+                  ),
+                  DataCell(Text(item.resolvedBy ?? 'Administrator')),
+                ]
+              : [
+                  DataCell(
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (isNew)
+                          Container(
+                            width: 3.5,
+                            height: 24,
+                            margin: const EdgeInsets.only(right: 8),
+                            decoration: BoxDecoration(
+                              color: colors.info,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                        Text(
+                            item.type == 'Vendor' ? 'Stall Holder' : item.type),
+                      ],
+                    ),
+                  ),
+                  DataCell(
+                    Wrap(
+                      spacing: 7,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          item.accountIssue,
+                          style: TextStyle(
+                            color: colors.accent,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
+                        if (isNew)
+                          const StatusBadge(
+                            label: 'NEW',
+                            kind: BadgeKind.info,
+                          ),
+                      ],
+                    ),
+                  ),
+                  DataCell(Text(item.submittedBy)),
+                  DataCell(Text(item.reason)),
+                  DataCell(
+                    CategoryBadge(
+                      category: item.category ?? 'FRUITS',
+                    ),
+                  ),
+                  DataCell(
+                    Text(
+                      '${item.date.month.toString().padLeft(2, '0')}/${item.date.day.toString().padLeft(2, '0')}/${item.date.year}',
+                    ),
+                  ),
+                  DataCell(
+                    StatusBadge(
+                      label: enumLabel(item.status),
+                      kind: item.status == ReportStatus.resolved
+                          ? BadgeKind.success
+                          : item.status == ReportStatus.underReview
+                              ? BadgeKind.info
+                              : BadgeKind.danger,
+                    ),
+                  ),
+                  DataCell(
+                    Text(
+                      enumLabel(item.priority),
+                      style: TextStyle(
+                        color: item.priority == Priority.high
+                            ? colors.danger
+                            : item.priority == Priority.medium
+                                ? colors.warning
+                                : colors.mutedText,
                       ),
-                    ],
-            );
-          },
-        )
-        .toList();
+                    ),
+                  ),
+                ],
+        );
+      },
+    ).toList();
     return ScrollableDataTable(
       verticalController: verticalController,
-      minWidth: history ? 1550 : 1550,
+      minWidth: history ? 1450 : 1300,
       columnSpacing: 18,
       columns: history
           ? const [
               DataColumn(
-                columnWidth: FlexColumnWidth(1.15),
+                columnWidth: FlexColumnWidth(.85),
                 label: Text('TYPE'),
               ),
               DataColumn(
@@ -556,11 +555,11 @@ class _ReportTable extends StatelessWidget {
                 label: Text('REPORT ID'),
               ),
               DataColumn(
-                columnWidth: FlexColumnWidth(1.4),
+                columnWidth: FlexColumnWidth(1.35),
                 label: Text('REPORTED USER'),
               ),
               DataColumn(
-                columnWidth: FlexColumnWidth(1.3),
+                columnWidth: FlexColumnWidth(1.25),
                 label: Text('REASON'),
               ),
               DataColumn(
@@ -568,33 +567,29 @@ class _ReportTable extends StatelessWidget {
                 label: Text('DECISION'),
               ),
               DataColumn(
-                columnWidth: FlexColumnWidth(1.3),
+                columnWidth: FlexColumnWidth(1.25),
                 label: Text('ACTION TAKEN'),
               ),
               DataColumn(
-                columnWidth: FlexColumnWidth(1.4),
+                columnWidth: FlexColumnWidth(1.35),
                 label: Text('RESOLVED DATE'),
               ),
               DataColumn(
-                columnWidth: FlexColumnWidth(1.2),
+                columnWidth: FlexColumnWidth(1.15),
                 label: Text('RESOLVED BY'),
               ),
             ]
           : const [
               DataColumn(
-                columnWidth: FlexColumnWidth(1.15),
+                columnWidth: FlexColumnWidth(.85),
                 label: Text('TYPE'),
               ),
               DataColumn(
-                columnWidth: FlexColumnWidth(1.1),
-                label: Text('REPORT ID'),
-              ),
-              DataColumn(
-                columnWidth: FlexColumnWidth(1.5),
+                columnWidth: FlexColumnWidth(1.4),
                 label: Text('ACCOUNT / ISSUE'),
               ),
               DataColumn(
-                columnWidth: FlexColumnWidth(1.3),
+                columnWidth: FlexColumnWidth(1.2),
                 label: Text('SUBMITTED BY'),
               ),
               DataColumn(
@@ -606,7 +601,7 @@ class _ReportTable extends StatelessWidget {
                 label: Text('CATEGORY'),
               ),
               DataColumn(
-                columnWidth: FlexColumnWidth(1.0),
+                columnWidth: FlexColumnWidth(.9),
                 label: Text('DATE'),
               ),
               DataColumn(
@@ -614,7 +609,7 @@ class _ReportTable extends StatelessWidget {
                 label: Text('STATUS'),
               ),
               DataColumn(
-                columnWidth: FlexColumnWidth(1.1),
+                columnWidth: FlexColumnWidth(.8),
                 label: Text('PRIORITY'),
               ),
             ],
@@ -624,82 +619,29 @@ class _ReportTable extends StatelessWidget {
 }
 
 class _ReportViewToggle extends StatelessWidget {
-  const _ReportViewToggle({
-    required this.history,
-    required this.reviewCount,
-    required this.resolvedCount,
-    required this.onChanged,
-  });
+  const _ReportViewToggle({required this.history, required this.onChanged});
 
   final bool history;
-  final int reviewCount;
-  final int resolvedCount;
   final ValueChanged<bool> onChanged;
 
   @override
-  Widget build(BuildContext context) {
-    final colors = semanticColors(context);
-    return SegmentedButton<bool>(
-      style: ButtonStyle(
-        backgroundColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return const Color(0xFFD1FAE5);
-          }
-          if (states.contains(WidgetState.hovered)) {
-            return colors.hoverSurface;
-          }
-          return colors.cardBackground;
-        }),
-        foregroundColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return const Color(0xFF065F46);
-          }
-          return colors.secondaryText;
-        }),
-        textStyle: WidgetStateProperty.resolveWith((states) {
-          final isSelected = states.contains(WidgetState.selected);
-          return TextStyle(
-            fontSize: 12,
-            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-          );
-        }),
-        iconColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return const Color(0xFF065F46);
-          }
-          return colors.secondaryText;
-        }),
-        side: WidgetStatePropertyAll(
-          BorderSide(color: colors.subtleBorder),
-        ),
-        shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
+  Widget build(BuildContext context) => SegmentedButton<bool>(
+        segments: const [
+          ButtonSegment<bool>(
+            value: false,
+            label: Text('Review'),
+            icon: Icon(Icons.inbox_outlined, size: 15),
           ),
-        ),
-        padding: const WidgetStatePropertyAll(
-          EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        ),
-        elevation: const WidgetStatePropertyAll(0),
-        mouseCursor: const WidgetStatePropertyAll(SystemMouseCursors.click),
-      ),
-      segments: [
-        ButtonSegment<bool>(
-          value: false,
-          label: Text('Review ($reviewCount)'),
-          icon: const Icon(Icons.inbox_outlined, size: 15),
-        ),
-        ButtonSegment<bool>(
-          value: true,
-          label: Text('Resolved ($resolvedCount)'),
-          icon: const Icon(Icons.history_rounded, size: 15),
-        ),
-      ],
-      selected: {history},
-      showSelectedIcon: false,
-      onSelectionChanged: (selection) => onChanged(selection.first),
-    );
-  }
+          ButtonSegment<bool>(
+            value: true,
+            label: Text('Resolved'),
+            icon: Icon(Icons.history_rounded, size: 15),
+          ),
+        ],
+        selected: {history},
+        showSelectedIcon: false,
+        onSelectionChanged: (selection) => onChanged(selection.first),
+      );
 }
 
 class _ReportTabs extends StatelessWidget {
@@ -708,17 +650,14 @@ class _ReportTabs extends StatelessWidget {
   final ValueChanged<String> onChanged;
 
   @override
-  Widget build(BuildContext context) => SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            _tab(context, 'All Complaints', selected == 'All Types'),
-            const SizedBox(width: 8),
-            _tab(context, 'Stall Holders', selected == 'Stall Holders'),
-            const SizedBox(width: 8),
-            _tab(context, 'Customers', selected == 'Customers'),
-          ],
-        ),
+  Widget build(BuildContext context) => Row(
+        children: [
+          _tab(context, 'All Complaints', selected == 'All Types'),
+          const SizedBox(width: 8),
+          _tab(context, 'Stall Holders', selected == 'Stall Holders'),
+          const SizedBox(width: 8),
+          _tab(context, 'Customers', selected == 'Customers'),
+        ],
       );
 
   Widget _tab(BuildContext context, String label, bool active) => Material(
@@ -786,7 +725,8 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
     final issue = widget.report.accountIssue.trim().toLowerCase();
     final vendorName = widget.report.vendorName.trim().toLowerCase();
 
-    if (widget.report.type == 'Vendor' || widget.report.type == 'Stall Holder') {
+    if (widget.report.type == 'Vendor' ||
+        widget.report.type == 'Stall Holder') {
       for (final vendor in data.vendors) {
         final name = vendor.name.trim().toLowerCase();
         if (name == issue || name == vendorName) {
@@ -827,11 +767,13 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
   String _reportedAccountTypeLabel() {
     final account = _reportedAccount(ref.watch(appDataProvider));
     if (account == null) {
-      return (widget.report.type == 'Vendor' || widget.report.type == 'Stall Holder')
+      return (widget.report.type == 'Vendor' ||
+              widget.report.type == 'Stall Holder')
           ? 'STALL HOLDER'
           : widget.report.type.toUpperCase();
     }
-    return (account.type.contains('Stall Holder') || account.type.startsWith('Vendor'))
+    return (account.type.contains('Stall Holder') ||
+            account.type.startsWith('Vendor'))
         ? 'STALL HOLDER'
         : 'CUSTOMER';
   }
@@ -846,95 +788,185 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
 
   String _reportedAccountSubtitle() {
     final account = _reportedAccount(ref.watch(appDataProvider));
-    final isCustomer = widget.report.type == 'Customer' || account?.type == 'Customer';
+    final isCustomer =
+        widget.report.type == 'Customer' || account?.type == 'Customer';
     return isCustomer
         ? 'Customer Account'
         : 'Stall Holder: ${widget.report.owner.isNotEmpty ? widget.report.owner : widget.report.vendorName}';
   }
 
-  Future<void> _resolveReport(bool markResolved) async {
-    if (processing) return;
-    final title =
-        markResolved ? 'Resolve Report' : 'Dismiss Report Without Action';
+  Future<void> _dismissReport({bool markResolved = false}) async {
+    final resolutionNote = TextEditingController();
+    final title = markResolved ? 'Mark Report as Resolved?' : 'Dismiss Report?';
     final confirmation = markResolved
-        ? 'Are you sure you want to mark this report as resolved?'
+        ? 'This will mark the report as resolved without changing the account '
+            'status.'
         : 'This will dismiss the report without changing the account status.';
-    final noteResult = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => _ResolveReportDialog(
-        title: title,
-        reportId: widget.report.id,
-        accountIssue: widget.report.accountIssue,
-        confirmation: confirmation,
-        markResolved: markResolved,
-      ),
-    );
-    if (noteResult == null || !mounted) return;
-    setState(() => processing = true);
-    final error = markResolved
-        ? await ref.read(appDataProvider.notifier).resolveReport(
-              reportId: widget.report.id,
-              note: noteResult,
-            )
-        : await ref.read(appDataProvider.notifier).dismissReport(
-              reportId: widget.report.id,
-              note: noteResult,
-            );
-    if (!mounted) return;
-    if (error != null) {
-      setState(() => processing = false);
-      _showError(error);
-      return;
-    }
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          markResolved
-              ? 'Report resolved successfully. Moved to Resolved Reports.'
-              : 'Report dismissed successfully. Moved to Resolved Reports.',
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(title),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Report: #${widget.report.id}'),
+                const SizedBox(height: 7),
+                Text('Reported User: ${widget.report.accountIssue}'),
+                const SizedBox(height: 14),
+                Text(confirmation),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: resolutionNote,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Optional Resolution Note',
+                    hintText: 'Enter a note for the resolved report',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child:
+                  Text(markResolved ? 'Mark as Resolved' : 'Confirm Dismiss'),
+            ),
+          ],
         ),
-      ),
-    );
+      );
+      if (confirmed != true || !mounted) return;
+      setState(() => processing = true);
+      final error = markResolved
+          ? await ref.read(appDataProvider.notifier).resolveReport(
+                reportId: widget.report.id,
+                note: resolutionNote.text,
+              )
+          : await ref.read(appDataProvider.notifier).dismissReport(
+                reportId: widget.report.id,
+                note: resolutionNote.text,
+              );
+      if (!mounted) return;
+      if (error != null) {
+        setState(() => processing = false);
+        _showError(error);
+        return;
+      }
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            markResolved
+                ? 'Report resolved successfully. Moved to Resolved Reports.'
+                : 'Report dismissed successfully. Moved to Resolved Reports.',
+          ),
+        ),
+      );
+    } finally {
+      resolutionNote.dispose();
+    }
   }
 
-
-  Future<void> _suspendAccount(_ReportedAccount? account) async {
+  Future<void> _blockAccount(_ReportedAccount? account) async {
     if (account == null || processing) return;
-    final result = await showDialog<_ReportSuspensionData>(
-      context: context,
-      builder: (dialogContext) => _ReportSuspendAccountDialog(
-        accountName: account.name,
-        accountType: account.type,
-        reportId: widget.report.id,
-      ),
-    );
-    if (result == null || !mounted) return;
-    setState(() => processing = true);
-    final error =
-        await ref.read(appDataProvider.notifier).suspendAccountFromReport(
-              reportId: widget.report.id,
-              reason: result.reason,
-              startDate: result.startDate,
-              endDate: result.endDate,
-            );
-    if (!mounted) return;
-    if (error != null) {
-      setState(() => processing = false);
-      _showError(error);
-      return;
-    }
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content:
-            Text('Account suspended successfully. Report moved to Resolved.'),
-      ),
-    );
-    if (mounted) {
-      context.go(
-        '/accounts?accountId=${Uri.encodeComponent(account.id)}&open=1',
+    final reason = TextEditingController();
+    String? validationError;
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Block Account?'),
+            content: SizedBox(
+              width: 430,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Reported User: ${account.name}'),
+                  const SizedBox(height: 6),
+                  Text('Account Type: ${account.type}'),
+                  const SizedBox(height: 6),
+                  Text('Related Report: #${widget.report.id}'),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: reason,
+                    minLines: 2,
+                    maxLines: 4,
+                    onChanged: (_) {
+                      if (validationError != null) {
+                        setDialogState(() => validationError = null);
+                      }
+                    },
+                    decoration: InputDecoration(
+                      labelText: 'Blocking Reason *',
+                      hintText: 'Enter the reason for blocking',
+                      errorText: validationError,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: semanticColors(context).danger,
+                ),
+                onPressed: () {
+                  if (reason.text.trim().isEmpty) {
+                    setDialogState(
+                      () => validationError = 'A blocking reason is required.',
+                    );
+                    return;
+                  }
+                  Navigator.pop(dialogContext, true);
+                },
+                icon: const Icon(Icons.block_outlined, size: 17),
+                label: const Text('Block Account'),
+              ),
+            ],
+          ),
+        ),
       );
+      if (confirmed != true || !mounted) return;
+      setState(() => processing = true);
+      final error =
+          await ref.read(appDataProvider.notifier).blockAccountFromReport(
+                reportId: widget.report.id,
+                reason: reason.text,
+              );
+      if (!mounted) return;
+      if (error != null) {
+        setState(() => processing = false);
+        _showError(error);
+        return;
+      }
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Account blocked successfully. Report moved to Resolved.'),
+        ),
+      );
+      if (mounted) {
+        context.go(
+          '/accounts?accountId=${Uri.encodeComponent(account.id)}&open=1',
+        );
+      }
+    } finally {
+      reason.dispose();
     }
   }
 
@@ -944,20 +976,44 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
   }
 
   Future<void> action(String title, ReportStatus value) async {
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) => _ReportActionInputDialog(title: title),
-    );
-    if (result == null || result.isEmpty || !mounted) return;
-    setState(() => processing = true);
-    await ref
-        .read(appDataProvider.notifier)
-        .updateReport(widget.report.id, value, result);
-    if (mounted) {
-      Navigator.pop(context);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('$title completed.')));
+    final input = TextEditingController();
+    try {
+      final result = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(title),
+          content: TextField(
+            controller: input,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              hintText: 'Add a reason or message...',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, input.text.trim()),
+              child: const Text('Confirm'),
+            ),
+          ],
+        ),
+      );
+      if (result == null || result.isEmpty || !mounted) return;
+      setState(() => processing = true);
+      await ref
+          .read(appDataProvider.notifier)
+          .updateReport(widget.report.id, value, result);
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$title completed.')));
+      }
+    } finally {
+      input.dispose();
     }
   }
 
@@ -968,10 +1024,7 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
     final screenHeight = MediaQuery.sizeOf(context).height;
 
     return Dialog(
-      insetPadding: EdgeInsets.symmetric(
-        horizontal: MediaQuery.sizeOf(context).width < 500 ? 12 : 24,
-        vertical: 20,
-      ),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
@@ -1178,7 +1231,7 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
         borderRadius: BorderRadius.circular(18),
       ),
     );
-    final suspendStyle = FilledButton.styleFrom(
+    final dangerStyle = FilledButton.styleFrom(
       backgroundColor: semanticColors(context).danger,
       minimumSize: const Size(0, 36),
       padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -1201,30 +1254,24 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
     );
 
     final dismissBtn = OutlinedButton(
-      onPressed: processing ? null : () => _resolveReport(false),
+      onPressed: processing ? null : _dismissReport,
       style: outlineStyle,
       child: const Text('Dismiss Report', style: TextStyle(fontSize: 11.5)),
     );
 
     final resolveBtn = FilledButton.icon(
-      onPressed: processing
-          ? null
-          : () => _resolveReport(true),
+      onPressed: processing ? null : () => _dismissReport(markResolved: true),
       style: resolvedStyle,
       icon: const Icon(Icons.check_circle_outline, size: 16),
       label: const Text('Mark as Resolved', style: TextStyle(fontSize: 11.5)),
     );
 
-    final suspendBtn = FilledButton.icon(
-      onPressed: processing ||
-              account == null ||
-              account.status == AccountStatus.blocked ||
-              account.status == AccountStatus.suspended
-          ? null
-          : () => _suspendAccount(account),
-      style: suspendStyle,
-      icon: const Icon(Icons.pause_circle_outline, size: 16),
-      label: const Text('Suspend Account', style: TextStyle(fontSize: 11.5)),
+    final blockBtn = FilledButton.icon(
+      onPressed:
+          processing || account == null ? null : () => _blockAccount(account),
+      style: dangerStyle,
+      icon: const Icon(Icons.block_outlined, size: 16),
+      label: const Text('Block Account', style: TextStyle(fontSize: 11.5)),
     );
 
     return Container(
@@ -1235,51 +1282,37 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          if (constraints.maxWidth > 600) {
+          if (constraints.maxWidth > 650) {
             return Row(
               children: [
                 Expanded(child: warningBtn),
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
                 Expanded(child: dismissBtn),
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
                 Expanded(child: resolveBtn),
-                const SizedBox(width: 8),
-                Expanded(child: suspendBtn),
-              ],
-            );
-          } else if (constraints.maxWidth > 420) {
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    Expanded(child: warningBtn),
-                    const SizedBox(width: 8),
-                    Expanded(child: dismissBtn),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(child: resolveBtn),
-                    const SizedBox(width: 8),
-                    Expanded(child: suspendBtn),
-                  ],
-                ),
+                const SizedBox(width: 10),
+                Expanded(child: blockBtn),
               ],
             );
           }
           return Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              warningBtn,
-              const SizedBox(height: 8),
-              dismissBtn,
-              const SizedBox(height: 8),
-              resolveBtn,
-              const SizedBox(height: 8),
-              suspendBtn,
+              Row(
+                children: [
+                  Expanded(child: warningBtn),
+                  const SizedBox(width: 10),
+                  Expanded(child: dismissBtn),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(child: resolveBtn),
+                  const SizedBox(width: 10),
+                  Expanded(child: blockBtn),
+                ],
+              ),
             ],
           );
         },
@@ -1331,7 +1364,8 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
 
   Widget _info(BuildContext context) {
     final account = _reportedAccount(ref.watch(appDataProvider));
-    final isCustomer = widget.report.type == 'Customer' || account?.type == 'Customer';
+    final isCustomer =
+        widget.report.type == 'Customer' || account?.type == 'Customer';
     final reporterName = widget.report.submittedBy.trim().isNotEmpty
         ? widget.report.submittedBy
         : 'Unknown Reporter';
@@ -1442,44 +1476,9 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    reportedDetail,
-                                    style: const TextStyle(fontSize: 10),
-                                  ),
-                                  if (account != null) ...[
-                                    const SizedBox(height: 3),
-                                    InkWell(
-                                      onTap: () {
-                                        Navigator.pop(context);
-                                        context.go(
-                                          '/accounts?accountId=${Uri.encodeComponent(account.id)}&open=1',
-                                        );
-                                      },
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text(
-                                            'View Account Profile',
-                                            style: TextStyle(
-                                              fontSize: 9.5,
-                                              color: semanticColors(context).accent,
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 3),
-                                          Icon(
-                                            Icons.arrow_forward_rounded,
-                                            size: 10,
-                                            color: semanticColors(context).accent,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ],
+                              child: Text(
+                                reportedDetail,
+                                style: const TextStyle(fontSize: 10),
                               ),
                             ),
                             StatusBadge(
@@ -1613,7 +1612,8 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
     }
 
     final account = _reportedAccount(ref.watch(appDataProvider));
-    final isCustomer = widget.report.type == 'Customer' || account?.type == 'Customer';
+    final isCustomer =
+        widget.report.type == 'Customer' || account?.type == 'Customer';
 
     final rows = <TableRow>[
       TableRow(
@@ -1662,334 +1662,4 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
           ),
         ),
       );
-}
-
-class _ResolveReportDialog extends StatefulWidget {
-  const _ResolveReportDialog({
-    required this.title,
-    required this.reportId,
-    required this.accountIssue,
-    required this.confirmation,
-    required this.markResolved,
-  });
-
-  final String title;
-  final String reportId;
-  final String accountIssue;
-  final String confirmation;
-  final bool markResolved;
-
-  @override
-  State<_ResolveReportDialog> createState() => _ResolveReportDialogState();
-}
-
-class _ResolveReportDialogState extends State<_ResolveReportDialog> {
-  late final TextEditingController _noteController;
-
-  @override
-  void initState() {
-    super.initState();
-    _noteController = TextEditingController();
-  }
-
-  @override
-  void dispose() {
-    _noteController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.title),
-      content: SizedBox(
-        width: 420,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Report: #${widget.reportId}'),
-            const SizedBox(height: 7),
-            Text('Reported User: ${widget.accountIssue}'),
-            const SizedBox(height: 14),
-            Text(widget.confirmation),
-            const SizedBox(height: 14),
-            TextField(
-              controller: _noteController,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Optional Resolution Note',
-                hintText: 'Enter a note for the resolved report',
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, null),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, _noteController.text.trim()),
-          child: Text(
-            widget.markResolved ? 'Mark as Resolved' : 'Confirm Dismiss',
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-
-class _ReportSuspensionData {
-  const _ReportSuspensionData({
-    required this.reason,
-    required this.startDate,
-    required this.endDate,
-  });
-
-  final String reason;
-  final DateTime startDate;
-  final DateTime endDate;
-}
-
-class _ReportSuspendAccountDialog extends StatefulWidget {
-  const _ReportSuspendAccountDialog({
-    required this.accountName,
-    required this.accountType,
-    required this.reportId,
-  });
-
-  final String accountName;
-  final String accountType;
-  final String reportId;
-
-  @override
-  State<_ReportSuspendAccountDialog> createState() =>
-      _ReportSuspendAccountDialogState();
-}
-
-class _ReportSuspendAccountDialogState
-    extends State<_ReportSuspendAccountDialog> {
-  late final TextEditingController _reasonController;
-  late DateTime _startDate;
-  late DateTime _endDate;
-  String? _validationError;
-
-  @override
-  void initState() {
-    super.initState();
-    _reasonController = TextEditingController();
-    _startDate = DateTime.now();
-    _endDate = DateTime.now().add(const Duration(days: 7));
-  }
-
-  @override
-  void dispose() {
-    _reasonController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _pickDate(bool start) async {
-    final selected = await showDatePicker(
-      context: context,
-      initialDate: start ? _startDate : _endDate,
-      firstDate: start ? DateUtils.dateOnly(_startDate) : _startDate,
-      lastDate: DateTime.now().add(const Duration(days: 3650)),
-    );
-    if (selected == null) return;
-    setState(() {
-      if (start) {
-        _startDate = selected;
-        if (!_endDate.isAfter(_startDate)) {
-          _endDate = _startDate.add(const Duration(days: 1));
-        }
-      } else {
-        _endDate = selected;
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Suspend Account?'),
-      content: SizedBox(
-        width: 440,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Reported User: ${widget.accountName}'),
-              const SizedBox(height: 6),
-              Text('Account Type: ${widget.accountType}'),
-              const SizedBox(height: 6),
-              Text('Related Report: #${widget.reportId}'),
-              const SizedBox(height: 14),
-              TextField(
-                controller: _reasonController,
-                minLines: 2,
-                maxLines: 4,
-                onChanged: (_) {
-                  if (_validationError != null) {
-                    setState(() => _validationError = null);
-                  }
-                },
-                decoration: InputDecoration(
-                  labelText: 'Suspension Reason *',
-                  hintText: 'Enter the reason for temporary suspension',
-                  errorText: _validationError,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => _pickDate(true),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 12,
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Starts', style: TextStyle(fontSize: 11)),
-                          const SizedBox(height: 2),
-                          Text(
-                            shortDate.format(_startDate),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => _pickDate(false),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 12,
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Ends', style: TextStyle(fontSize: 11)),
-                          const SizedBox(height: 2),
-                          Text(
-                            shortDate.format(_endDate),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, null),
-          child: const Text('Cancel'),
-        ),
-        FilledButton.icon(
-          style: FilledButton.styleFrom(
-            backgroundColor: semanticColors(context).danger,
-          ),
-          onPressed: () {
-            final reason = _reasonController.text.trim();
-            if (reason.isEmpty) {
-              setState(
-                () => _validationError = 'A suspension reason is required.',
-              );
-              return;
-            }
-            if (!_endDate.isAfter(_startDate)) {
-              setState(
-                () => _validationError =
-                    'The end date must be after the start date.',
-              );
-              return;
-            }
-            Navigator.pop(
-              context,
-              _ReportSuspensionData(
-                reason: reason,
-                startDate: _startDate,
-                endDate: _endDate,
-              ),
-            );
-          },
-          icon: const Icon(Icons.pause_circle_outline, size: 17),
-          label: const Text('Suspend Account'),
-        ),
-      ],
-    );
-  }
-}
-
-class _ReportActionInputDialog extends StatefulWidget {
-  const _ReportActionInputDialog({required this.title});
-  final String title;
-
-  @override
-  State<_ReportActionInputDialog> createState() =>
-      _ReportActionInputDialogState();
-}
-
-class _ReportActionInputDialogState extends State<_ReportActionInputDialog> {
-  late final TextEditingController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.title),
-      content: TextField(
-        controller: _controller,
-        maxLines: 3,
-        autofocus: true,
-        decoration: const InputDecoration(
-          hintText: 'Add a reason or message...',
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, null),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, _controller.text.trim()),
-          child: const Text('Confirm'),
-        ),
-      ],
-    );
-  }
 }

@@ -309,18 +309,23 @@ class _RenewalsPageState extends ConsumerState<RenewalsPage> {
                   trailing: [
                     _filter(
                       status,
-                      history
-                          ? [
-                              'All Statuses',
-                              'Approved',
-                              'Expired',
-                            ]
-                          : [
-                              'All Statuses',
-                              'Reviewing',
-                            ],
+                      const [
+                        'All Statuses',
+                        'Reviewing',
+                        'Approved',
+                        'Expired',
+                      ],
                       (v) {
-                        status = v;
+                        setState(() {
+                          status = v;
+                          if (v == 'Approved' || v == 'Expired') {
+                            history = true;
+                            _userSelectedTab = true;
+                          } else if (v == 'Reviewing') {
+                            history = false;
+                            _userSelectedTab = true;
+                          }
+                        });
                         _resetTable();
                       },
                     ),
