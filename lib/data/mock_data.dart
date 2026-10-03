@@ -120,7 +120,25 @@ List<Vendor> seedVendors({List<Order>? ordersSource}) {
   }
 
   // Seed vendor accounts for applicants whose initial applications are verified
-  final verifiedIndices = [0, 1, 3, 4, 6, 7, 8, 10, 11, 13, 15, 16, 18, 19, 21, 22, 24];
+  final verifiedIndices = [
+    0,
+    1,
+    3,
+    4,
+    6,
+    7,
+    8,
+    10,
+    11,
+    13,
+    15,
+    16,
+    18,
+    19,
+    21,
+    22,
+    24
+  ];
 
   return List.generate(verifiedIndices.length, (i) {
     final index = verifiedIndices[i];
@@ -281,7 +299,8 @@ List<RenewalRequest> seedRenewals() {
     'SARI-SARI',
   ];
   final now = DateTime.now();
-  final targetYear = (now.month > 1 || (now.month == 1 && now.day > 7)) ? 2027 : 2026;
+  final targetYear =
+      (now.month > 1 || (now.month == 1 && now.day > 7)) ? 2027 : 2026;
   final annualJanuaryDeadline = DateTime(targetYear, 1, 7);
   final expiredJanuaryDeadline = DateTime(targetYear - 1, 1, 7);
 
@@ -300,7 +319,8 @@ List<RenewalRequest> seedRenewals() {
       };
       final DateTime submittedAt = status == RenewalStatus.expired
           ? expiredJanuaryDeadline.subtract(Duration(days: index % 5 + 1))
-          : DateTime(now.year, now.month, now.day).subtract(Duration(days: index % 5));
+          : DateTime(now.year, now.month, now.day)
+              .subtract(Duration(days: index % 5));
 
       return RenewalRequest(
         id: '#RN-${92834 + index}',
@@ -360,7 +380,7 @@ List<Report> seedReports() {
           ? 'The seller became hostile and sent aggressive messages on the chat feature after a customer inquired about late order delivery.'
           : 'The customer submitted abusive and profane messages to the vendor staff during order inquiry.',
       'Bug Report' =>
-          'The mobile application crashed during checkout while selecting delivery location, causing duplicated pending order charges.',
+        'The mobile application crashed during checkout while selecting delivery location, causing duplicated pending order charges.',
       'Incorrect Pricing' => isStallHolder
           ? 'Stall displayed price of ₱180/kg on app listing but charged ₱250/kg at digital payment checkout without notice.'
           : 'Customer attempted to override listed item prices by placing invalid custom order notes.',
@@ -370,8 +390,18 @@ List<Report> seedReports() {
     };
 
     final isResolved = status == ReportStatus.resolved;
-    final decisions = ['Warning Issued', 'Account Blocked', 'Refund Approved', 'No Violation'];
-    final actions = ['Warning Issued', 'Account Blocked', 'Refund Processed', 'Dismissed'];
+    final decisions = [
+      'Warning Issued',
+      'Account Blocked',
+      'Refund Approved',
+      'No Violation'
+    ];
+    final actions = [
+      'Warning Issued',
+      'Account Blocked',
+      'Refund Processed',
+      'Dismissed'
+    ];
 
     return Report(
       id: '#RPT-${(index + 1) * 100}',
@@ -387,9 +417,8 @@ List<Report> seedReports() {
       reporterEmail:
           '${submittedBy.toLowerCase().replaceAll(RegExp(r'[^a-z]+'), '.')}@example.com',
       phone: '+63 917 123 ${4500 + index}',
-      vendorName: isStallHolder
-          ? accountIssue
-          : _names[(index + 10) % _names.length],
+      vendorName:
+          isStallHolder ? accountIssue : _names[(index + 10) % _names.length],
       owner: _customers[(index + 3) % _customers.length],
       stallNumber: 'Block ${12 + index}',
       previousViolations: (index % 3),
@@ -605,18 +634,19 @@ List<Order> seedOrders() {
     // Select vendor profile ensuring realistic distribution across Accounts stall holders
     final profileIdx = switch (index % 12) {
       0 || 1 || 2 => 0, // Aicel Castillo (Fresh Fish) - 12 orders
-      3 || 4 => 1,      // Mila Mendoza (Meat) - 8 orders
-      5 || 6 => 2,      // Elena Ramos (Fruits) - 8 orders
-      7 => 3,           // Sophie Sb (Chicken) - 4 orders
-      8 => 4,           // Emilio Navarro (Vegetables) - 4 orders
-      9 => 5,           // Diosa Del Rosario (Dried Fish) - 4 orders
-      10 => 6,          // Maria Clara Santos (Maritatas) - 4 orders
-      _ => 7,           // Antonio Reyes (SARI-SARI) - 4 orders
+      3 || 4 => 1, // Mila Mendoza (Meat) - 8 orders
+      5 || 6 => 2, // Elena Ramos (Fruits) - 8 orders
+      7 => 3, // Sophie Sb (Chicken) - 4 orders
+      8 => 4, // Emilio Navarro (Vegetables) - 4 orders
+      9 => 5, // Diosa Del Rosario (Dried Fish) - 4 orders
+      10 => 6, // Maria Clara Santos (Maritatas) - 4 orders
+      _ => 7, // Antonio Reyes (SARI-SARI) - 4 orders
     };
 
     final profile = vendorProfiles[profileIdx];
     final prodPrimary = profile.products[index % profile.products.length];
-    final prodSecondary = profile.products[(index + 1) % profile.products.length];
+    final prodSecondary =
+        profile.products[(index + 1) % profile.products.length];
     final quantity = 1 + index % 4;
 
     final items = [
@@ -918,4 +948,3 @@ List<AuditLog> seedAuditLogs() {
     ),
   ];
 }
-

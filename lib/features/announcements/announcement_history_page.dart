@@ -49,7 +49,8 @@ class _AnnouncementHistoryPageState
         .where((a) => a.state == 'Sent' || (!a.isDraft && a.deliveredCount > 0))
         .length;
     final draftOrQueuedCount = announcements
-        .where((a) => a.isDraft || a.state == 'Draft' || a.state == 'Queued locally')
+        .where((a) =>
+            a.isDraft || a.state == 'Draft' || a.state == 'Queued locally')
         .length;
 
     // Filtered & sorted list
@@ -68,8 +69,10 @@ class _AnnouncementHistoryPageState
 
       final matchesStatus = selectedStatus == 'All Statuses' ||
           (selectedStatus == 'Sent' &&
-              (item.state == 'Sent' || (!item.isDraft && item.state != 'Draft'))) ||
-          (selectedStatus == 'Draft' && (item.isDraft || item.state == 'Draft')) ||
+              (item.state == 'Sent' ||
+                  (!item.isDraft && item.state != 'Draft'))) ||
+          (selectedStatus == 'Draft' &&
+              (item.isDraft || item.state == 'Draft')) ||
           (selectedStatus == 'Queued' && item.state == 'Queued locally');
 
       return matchesQuery && matchesAudience && matchesStatus;
@@ -231,7 +234,8 @@ class _AnnouncementHistoryPageState
                         style: TextStyle(fontSize: 11.5),
                       ),
                       style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
                       ),
                     ),
                   ],
@@ -278,7 +282,8 @@ class _AnnouncementHistoryPageState
                             // Announcement Title & Excerpt
                             DataCell(
                               ConstrainedBox(
-                                constraints: const BoxConstraints(maxWidth: 320),
+                                constraints:
+                                    const BoxConstraints(maxWidth: 320),
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -309,12 +314,16 @@ class _AnnouncementHistoryPageState
                             // Audience
                             DataCell(
                               StatusBadge(
-                                label: (item.audience.toLowerCase() == 'vendors' ||
-                                        item.audience.toLowerCase() == 'stall holders')
-                                    ? 'Stall Holders'
-                                    : item.audience,
+                                label:
+                                    (item.audience.toLowerCase() == 'vendors' ||
+                                            item.audience.toLowerCase() ==
+                                                'stall holders')
+                                        ? 'Stall Holders'
+                                        : item.audience,
                                 kind: switch (item.audience.toLowerCase()) {
-                                  'vendors' || 'stall holders' => BadgeKind.info,
+                                  'vendors' ||
+                                  'stall holders' =>
+                                    BadgeKind.info,
                                   'customers' => BadgeKind.warning,
                                   _ => BadgeKind.success,
                                 },
@@ -355,7 +364,9 @@ class _AnnouncementHistoryPageState
                               StatusBadge(
                                 label: item.isDraft
                                     ? 'Draft'
-                                    : (item.state.isEmpty ? 'Sent' : item.state),
+                                    : (item.state.isEmpty
+                                        ? 'Sent'
+                                        : item.state),
                                 kind: item.isDraft || item.state == 'Draft'
                                     ? BadgeKind.neutral
                                     : (item.state == 'Queued locally'
@@ -614,7 +625,8 @@ class _AnnouncementDetailDialog extends StatelessWidget {
 
               // Feature Image if present
               if (announcement.imageBytes != null ||
-                  (announcement.imageUrl != null && announcement.imageUrl!.isNotEmpty)) ...[
+                  (announcement.imageUrl != null &&
+                      announcement.imageUrl!.isNotEmpty)) ...[
                 ClipRRect(
                   borderRadius: BorderRadius.circular(10),
                   child: Container(

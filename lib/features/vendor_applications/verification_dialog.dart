@@ -289,7 +289,9 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                   children: [
                     Expanded(flex: 68, child: _documents(context)),
                     const SizedBox(width: 25),
-                    Expanded(flex: 32, child: _summary(context, currentApp, currentRenewal)),
+                    Expanded(
+                        flex: 32,
+                        child: _summary(context, currentApp, currentRenewal)),
                   ],
                 ),
               const SizedBox(height: 22),
@@ -390,7 +392,8 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                 label: const Text('Reopen for Review'),
                 style: OutlinedButton.styleFrom(
                   side: BorderSide(color: semanticColors(context).subtleBorder),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 ),
               ),
             ],
@@ -405,7 +408,8 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
           currentApp?.submittedAt ??
           DateTime.now();
       final dateStr = dateTimeFormat.format(date);
-      final reason = currentApp?.rejectionReason ?? currentRenewal?.rejectionReason;
+      final reason =
+          currentApp?.rejectionReason ?? currentRenewal?.rejectionReason;
       final label = currentRenewal != null && (reason == null || reason.isEmpty)
           ? 'Expired on $dateStr'
           : 'Rejected on $dateStr';
@@ -478,7 +482,8 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
           ),
           OutlinedButton.icon(
             onPressed: processing ? null : reject,
-            icon: const Icon(Icons.close_rounded, size: 15, color: Color(0xFFEF4444)),
+            icon: const Icon(Icons.close_rounded,
+                size: 15, color: Color(0xFFEF4444)),
             label: const Text(
               'Reject',
               style: TextStyle(
@@ -564,8 +569,7 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                   : 3,
           crossAxisSpacing: 14,
           mainAxisSpacing: 14,
-          childAspectRatio:
-              MediaQuery.sizeOf(context).width < 500 ? 1.6 : 1.15,
+          childAspectRatio: MediaQuery.sizeOf(context).width < 500 ? 1.6 : 1.15,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           children: tiles,
@@ -624,7 +628,8 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
       content = Image.asset(
         asset,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => _docPlaceholderIcon(colors, isPdf, isWord),
+        errorBuilder: (_, __, ___) =>
+            _docPlaceholderIcon(colors, isPdf, isWord),
       );
     } else {
       content = _docPlaceholderIcon(colors, isPdf, isWord);
@@ -769,11 +774,13 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                 'EMAIL ADDRESS',
                 '${widget.applicant.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '.')}@gmail.com',
               ),
-              if (app?.status == ApplicationStatus.verified || renewal?.status == RenewalStatus.approved) ...[
+              if (app?.status == ApplicationStatus.verified ||
+                  renewal?.status == RenewalStatus.approved) ...[
                 const SizedBox(height: 6),
                 OutlinedButton.icon(
                   onPressed: () {
-                    final targetId = 'VND-${widget.id.replaceAll(RegExp(r'[^0-9]'), '')}';
+                    final targetId =
+                        'VND-${widget.id.replaceAll(RegExp(r'[^0-9]'), '')}';
                     Navigator.pop(context);
                     context.go('/accounts?accountId=$targetId&open=1');
                   },
@@ -794,7 +801,8 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
           const SizedBox(height: 14),
           _buildRenewalHistoryCard(context),
         ],
-        if (app?.rejectionReason != null && app!.rejectionReason!.isNotEmpty) ...[
+        if (app?.rejectionReason != null &&
+            app!.rejectionReason!.isNotEmpty) ...[
           const SizedBox(height: 14),
           Container(
             width: double.infinity,
@@ -802,7 +810,8 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
             decoration: BoxDecoration(
               color: colors.dangerContainer,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.3)),
+              border: Border.all(
+                  color: const Color(0xFFEF4444).withValues(alpha: 0.3)),
             ),
             child: _item(
               app.status == ApplicationStatus.invalidDocs
@@ -1065,7 +1074,8 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
           );
       ref.read(notificationProvider.notifier).addNotification(
             title: 'Additional Documents Requested',
-            message: 'Requested document update from ${widget.applicant}: "$value"',
+            message:
+                'Requested document update from ${widget.applicant}: "$value"',
             type: NotificationType.vendorApplication,
             route: '/applications',
             actionLabel: 'View Status',
@@ -1077,7 +1087,8 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
           .updateRenewal(widget.id, RenewalStatus.reviewing);
       ref.read(notificationProvider.notifier).addNotification(
             title: 'Additional Documents Requested',
-            message: 'Requested document update from ${widget.applicant}: "$value"',
+            message:
+                'Requested document update from ${widget.applicant}: "$value"',
             type: NotificationType.renewal,
             route: '/renewals',
             actionLabel: 'View Status',

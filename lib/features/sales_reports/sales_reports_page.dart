@@ -24,6 +24,7 @@ class SalesReportsPage extends ConsumerStatefulWidget {
   @override
   ConsumerState<SalesReportsPage> createState() => _SalesReportsPageState();
 }
+
 class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
   final search = TextEditingController();
   final minimum = TextEditingController();
@@ -103,8 +104,7 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
     }
   }
 
-  static Widget _buildFloatingDatePicker(
-      BuildContext context, Widget? child) {
+  static Widget _buildFloatingDatePicker(BuildContext context, Widget? child) {
     final media = MediaQuery.of(context);
     final dialogWidth = (media.size.width * 0.9).clamp(320.0, 440.0);
     final dialogHeight = (media.size.height * 0.85).clamp(420.0, 560.0);
@@ -208,7 +208,8 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
               title: 'Sales Reports',
               subtitle:
                   'Review marketplace sales, orders, payments, refunds, and net revenue.',
-              trailing: _buildHeaderControls(colors, orders, filteredOrders, summary),
+              trailing:
+                  _buildHeaderControls(colors, orders, filteredOrders, summary),
               metrics: [
                 MetricCardData(
                   value: _fmtMoney(summary.grossSales),
@@ -254,7 +255,8 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // 2. ANALYTICS SECTION: SALES OVERVIEW CHART (ROW 1), SALES BY CATEGORY & TOP SELLERS (ROW 2)
-                  _buildSalesOverviewCard(colors, filteredOrders, summary, orders),
+                  _buildSalesOverviewCard(
+                      colors, filteredOrders, summary, orders),
                   const SizedBox(height: 16),
                   if (constraints.maxWidth >= 850)
                     Row(
@@ -266,8 +268,8 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
                         ),
                         const SizedBox(width: 16),
                         Expanded(
-                          child: _buildTopSellersCard(
-                              colors, filteredOrders, allOrders: orders),
+                          child: _buildTopSellersCard(colors, filteredOrders,
+                              allOrders: orders),
                         ),
                       ],
                     )
@@ -275,8 +277,8 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
                     _buildCategorySalesCard(
                         colors, filteredOrders, summary.grossSales),
                     const SizedBox(height: 16),
-                    _buildTopSellersCard(
-                        colors, filteredOrders, allOrders: orders),
+                    _buildTopSellersCard(colors, filteredOrders,
+                        allOrders: orders),
                   ],
 
                   const SizedBox(height: 24),
@@ -305,11 +307,8 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
   // ---------------------------------------------------------------------------
   // HEADER CONTROLS: DATE RANGE PRESETS & EXPORT
   // ---------------------------------------------------------------------------
-  Widget _buildHeaderControls(
-      AppSemanticColors colors,
-      List<Order> allOrders,
-      List<Order> values,
-      SalesSummary summary) {
+  Widget _buildHeaderControls(AppSemanticColors colors, List<Order> allOrders,
+      List<Order> values, SalesSummary summary) {
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -408,11 +407,8 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
   // ---------------------------------------------------------------------------
   // SALES OVERVIEW CHART
   // ---------------------------------------------------------------------------
-  Widget _buildSalesOverviewCard(
-      AppSemanticColors colors,
-      List<Order> filteredOrders,
-      SalesSummary summary,
-      List<Order> allOrders) {
+  Widget _buildSalesOverviewCard(AppSemanticColors colors,
+      List<Order> filteredOrders, SalesSummary summary, List<Order> allOrders) {
     // Peak sales day calculation
     final dailyTotals = <DateTime, double>{};
     for (final o in filteredOrders) {
@@ -592,14 +588,12 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
 
     if (startDate != null && endDate != null) {
       final duration = endDate!.difference(startDate!);
-      final prevStart =
-          startDate!.subtract(duration + const Duration(days: 1));
+      final prevStart = startDate!.subtract(duration + const Duration(days: 1));
       final prevEnd = startDate!.subtract(const Duration(seconds: 1));
 
       final prevOrders = allOrders.where((o) =>
           !o.placedAt.isBefore(prevStart) && !o.placedAt.isAfter(prevEnd));
-      final prevGross =
-          prevOrders.fold<double>(0.0, (sum, o) => sum + o.total);
+      final prevGross = prevOrders.fold<double>(0.0, (sum, o) => sum + o.total);
 
       if (prevGross > 0) {
         final pct = ((currentGross - prevGross) / prevGross) * 100;
@@ -663,8 +657,7 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
     );
   }
 
-  Widget _chartMetricToggle(
-      String label, bool isSelected, VoidCallback onTap) {
+  Widget _chartMetricToggle(String label, bool isSelected, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(5),
@@ -1203,9 +1196,11 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
                   () => _applyPreset(DatePreset.thisMonth),
                 ),
               if (category != 'All Categories')
-                _chip(category, () => setState(() => category = 'All Categories')),
+                _chip(category,
+                    () => setState(() => category = 'All Categories')),
               if (vendor != 'All Stall Holders')
-                _chip(vendor, () => setState(() => vendor = 'All Stall Holders')),
+                _chip(
+                    vendor, () => setState(() => vendor = 'All Stall Holders')),
               if (orderStatus != null)
                 _chip('Order: ${enumLabel(orderStatus!)}',
                     () => setState(() => orderStatus = null)),
@@ -1234,7 +1229,9 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
               DataColumn(label: Text('ORDER STATUS')),
               DataColumn(label: Text('ACTION')),
             ],
-            rows: visibleOrders.map((item) => _transactionRow(item, colors)).toList(),
+            rows: visibleOrders
+                .map((item) => _transactionRow(item, colors))
+                .toList(),
             verticalController: tableController,
             minWidth: 1080,
             rowHeight: 56,
@@ -1546,21 +1543,18 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
                           ? 'All statuses'
                           : enumLabel(nextOrderStatus!),
                       ['All statuses', ...OrderStatus.values.map(enumLabel)],
-                      (value) => setDialogState(() => nextOrderStatus =
-                          value == 'All statuses'
-                              ? null
-                              : OrderStatus.values.firstWhere(
-                                  (item) => enumLabel(item) == value)),
+                      (value) => setDialogState(() => nextOrderStatus = value ==
+                              'All statuses'
+                          ? null
+                          : OrderStatus.values
+                              .firstWhere((item) => enumLabel(item) == value)),
                     ),
                     _dropdown(
                       'Payment status',
                       nextPaymentStatus == null
                           ? 'All statuses'
                           : enumLabel(nextPaymentStatus!),
-                      [
-                        'All statuses',
-                        ...PaymentStatus.values.map(enumLabel)
-                      ],
+                      ['All statuses', ...PaymentStatus.values.map(enumLabel)],
                       (value) => setDialogState(() => nextPaymentStatus =
                           value == 'All statuses'
                               ? null
@@ -1618,8 +1612,10 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
                               );
                               if (picked != null) {
                                 setDialogState(() {
-                                  nextStart = DateTime(picked.year, picked.month, picked.day);
-                                  nextEnd = DateTime(picked.year, picked.month, picked.day, 23, 59, 59);
+                                  nextStart = DateTime(
+                                      picked.year, picked.month, picked.day);
+                                  nextEnd = DateTime(picked.year, picked.month,
+                                      picked.day, 23, 59, 59);
                                 });
                               }
                             },
@@ -1676,12 +1672,13 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
                   final max = double.tryParse(maxController.text.trim());
                   if (minController.text.trim().isNotEmpty && min == null ||
                       maxController.text.trim().isNotEmpty && max == null) {
-                    setDialogState(() => error = 'Amounts must be valid numbers.');
+                    setDialogState(
+                        () => error = 'Amounts must be valid numbers.');
                     return;
                   }
                   if (min != null && max != null && max < min) {
-                    setDialogState(() =>
-                        error = 'Maximum cannot be lower than minimum.');
+                    setDialogState(
+                        () => error = 'Maximum cannot be lower than minimum.');
                     return;
                   }
                   setState(() {
@@ -1993,16 +1990,17 @@ class _OrderDetailsDialog extends StatelessWidget {
                     colors,
                     child: Column(
                       children: [
-                        _financialRow('Subtotal', _fmtMoney(order.subtotal), colors),
-                        _financialRow('Discount', '-${_fmtMoney(order.discounts)}',
-                            colors,
+                        _financialRow(
+                            'Subtotal', _fmtMoney(order.subtotal), colors),
+                        _financialRow('Discount',
+                            '-${_fmtMoney(order.discounts)}', colors,
                             valueColor: const Color(0xFFEF4444)),
-                        _financialRow(
-                            'Delivery Fee', _fmtMoney(order.deliveryFee), colors),
-                        _financialRow(
-                            'Platform Fee', _fmtMoney(order.platformFee), colors),
-                        _financialRow(
-                            'Refund', '-${_fmtMoney(order.refundAmount)}', colors,
+                        _financialRow('Delivery Fee',
+                            _fmtMoney(order.deliveryFee), colors),
+                        _financialRow('Platform Fee',
+                            _fmtMoney(order.platformFee), colors),
+                        _financialRow('Refund',
+                            '-${_fmtMoney(order.refundAmount)}', colors,
                             valueColor: order.refundAmount > 0
                                 ? const Color(0xFF8B5CF6)
                                 : colors.mutedText),
@@ -2051,7 +2049,8 @@ class _OrderDetailsDialog extends StatelessWidget {
                             children: [
                               Text('Payment Status',
                                   style: TextStyle(
-                                      fontSize: 12, color: colors.secondaryText)),
+                                      fontSize: 12,
+                                      color: colors.secondaryText)),
                               _paymentStatusBadge(order.paymentStatus),
                             ],
                           ),
@@ -2063,7 +2062,8 @@ class _OrderDetailsDialog extends StatelessWidget {
                             children: [
                               Text('Order Status',
                                   style: TextStyle(
-                                      fontSize: 12, color: colors.secondaryText)),
+                                      fontSize: 12,
+                                      color: colors.secondaryText)),
                               _statusBadge(order.status),
                             ],
                           ),
@@ -2089,7 +2089,8 @@ class _OrderDetailsDialog extends StatelessWidget {
                   OutlinedButton(
                     onPressed: () => Navigator.of(context).pop(),
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 10),
                       side: BorderSide(color: colors.subtleBorder),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -2287,7 +2288,8 @@ class _SalesLineChartState extends State<_SalesLineChart> {
 
             if (x >= chartLeft && x <= chartRight && points.length > 1) {
               final step = chartWidth / (points.length - 1);
-              final idx = ((x - chartLeft) / step).round().clamp(0, points.length - 1);
+              final idx =
+                  ((x - chartLeft) / step).round().clamp(0, points.length - 1);
               setState(() => _hoveredIndex = idx);
             }
           },
@@ -2439,7 +2441,9 @@ class _ChartPainter extends CustomPainter {
       );
 
       final label = isSales
-          ? (value >= 1000 ? '₱${(value / 1000).toStringAsFixed(1)}k' : '₱${value.round()}')
+          ? (value >= 1000
+              ? '₱${(value / 1000).toStringAsFixed(1)}k'
+              : '₱${value.round()}')
           : '${value.round()}';
 
       final tp = TextPainter(
@@ -2458,8 +2462,10 @@ class _ChartPainter extends CustomPainter {
 
     final coords = <Offset>[];
     for (int i = 0; i < count; i++) {
-      final px = count > 1 ? leftMargin + i * stepX : leftMargin + chartWidth / 2;
-      final py = topMargin + chartHeight * (1 - (points[i].value / maxVal).clamp(0.0, 1.0));
+      final px =
+          count > 1 ? leftMargin + i * stepX : leftMargin + chartWidth / 2;
+      final py = topMargin +
+          chartHeight * (1 - (points[i].value / maxVal).clamp(0.0, 1.0));
       coords.add(Offset(px, py));
     }
 
@@ -2491,8 +2497,8 @@ class _ChartPainter extends CustomPainter {
           primaryColor.withValues(alpha: 0.22),
           primaryColor.withValues(alpha: 0.0),
         ],
-      ).createShader(Rect.fromLTWH(
-          leftMargin, topMargin, chartWidth, chartHeight))
+      ).createShader(
+          Rect.fromLTWH(leftMargin, topMargin, chartWidth, chartHeight))
       ..style = PaintingStyle.fill;
 
     canvas.drawPath(fillPath, fillPaint);
@@ -2636,7 +2642,8 @@ class _CategoryIconPainter extends CustomPainter {
         ..cubicTo(7.5, 10.5, 7.0, 14.0, 7.0, 17.0)
         ..close();
       canvas.drawPath(drumstick, stroke);
-      canvas.drawCircle(const Offset(4.5, 19.5), 1.5, stroke..strokeWidth = 1.2);
+      canvas.drawCircle(
+          const Offset(4.5, 19.5), 1.5, stroke..strokeWidth = 1.2);
     } else if (cat.contains('fish') || cat.contains('seafood')) {
       // Fresh fish outline
       final body = Path()
@@ -2653,7 +2660,9 @@ class _CategoryIconPainter extends CustomPainter {
         ..moveTo(14.5, 9.5)
         ..quadraticBezierTo(13.2, 12.0, 14.5, 14.5);
       canvas.drawPath(gill, stroke);
-    } else if (cat.contains('meat') || cat.contains('pork') || cat.contains('beef')) {
+    } else if (cat.contains('meat') ||
+        cat.contains('pork') ||
+        cat.contains('beef')) {
       // Prime steak cut / butcher meat contour
       final meat = Path()
         ..moveTo(11.5, 4.5)

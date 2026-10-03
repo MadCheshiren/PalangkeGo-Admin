@@ -15,7 +15,8 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('Vendor Applications Utilities & Logic', () {
-    test('isSameCalendarDay returns true for matching year, month, and day', () {
+    test('isSameCalendarDay returns true for matching year, month, and day',
+        () {
       final date1 = DateTime(2023, 10, 24, 14, 30);
       final date2 = DateTime(2023, 10, 24, 08, 00);
       final date3 = DateTime(2023, 10, 25, 08, 00);
@@ -157,7 +158,8 @@ void main() {
       expect(find.text('Reject'), findsNothing);
       expect(find.text('Request Additional Documents'), findsNothing);
       expect(find.text('Reopen for Review'), findsOneWidget);
-      expect(find.textContaining('Invalid business permit'), findsAtLeastNWidgets(1));
+      expect(find.textContaining('Invalid business permit'),
+          findsAtLeastNWidgets(1));
     });
 
     testWidgets(
