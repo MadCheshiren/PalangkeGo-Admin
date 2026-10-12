@@ -190,6 +190,12 @@ class _VendorApplicationsPageState
         )
         .toList()
       ..sort((a, b) {
+        if (status == 'All Applications') {
+          // Keep pending reviews at the top of the unfiltered table.
+          final aIsPending = a.status == ApplicationStatus.reviewing;
+          final bIsPending = b.status == ApplicationStatus.reviewing;
+          if (aIsPending != bIsPending) return aIsPending ? -1 : 1;
+        }
         final aIsNew = newApplicationIds.contains(a.id);
         final bIsNew = newApplicationIds.contains(b.id);
         if (aIsNew != bIsNew) {

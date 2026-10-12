@@ -68,24 +68,7 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
           .updateRenewal(widget.id, RenewalStatus.approved);
     }
     if (mounted) {
-      final latestVendors = ref.read(appDataProvider).vendors;
-      final createdVendor = latestVendors.cast<Vendor?>().firstWhere(
-            (v) =>
-                v?.name.trim().toLowerCase() ==
-                    widget.applicant.trim().toLowerCase() ||
-                v?.id == 'VND-${widget.id.replaceAll(RegExp(r'[^0-9]'), '')}',
-            orElse: () => latestVendors.cast<Vendor?>().firstWhere(
-                  (v) =>
-                      v?.name.trim().toLowerCase().contains(
-                            widget.applicant.trim().toLowerCase(),
-                          ) ==
-                      true,
-                  orElse: () => null,
-                ),
-          );
-
       final messenger = ScaffoldMessenger.of(context);
-      final nav = GoRouter.of(context);
 
       Navigator.pop(context);
 
@@ -97,14 +80,6 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
               'Application approved! Stall allocation (${widget.location}) locked.',
             ),
             duration: const Duration(seconds: 4),
-            action: createdVendor != null
-                ? SnackBarAction(
-                    label: 'View Account',
-                    onPressed: () {
-                      nav.go('/accounts?accountId=${createdVendor.id}&open=1');
-                    },
-                  )
-                : null,
           ),
         );
         Future.delayed(const Duration(seconds: 4), () {
@@ -540,17 +515,18 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
       final label = widget.renewal != null
           ? 'Approved on $dateStr'
           : 'Verified on $dateStr';
-
-      final latestVendors = ref.watch(appDataProvider).vendors;
-      final vendor = latestVendors.cast<Vendor?>().firstWhere(
-            (v) =>
-                v?.name.trim().toLowerCase() ==
-                    widget.applicant.trim().toLowerCase() ||
-                v?.id == 'VND-${widget.id.replaceAll(RegExp(r'[^0-9]'), '')}',
-            orElse: () => null,
-          );
-      final targetVendorId =
-          vendor?.id ?? 'VND-${widget.id.replaceAll(RegExp(r'[^0-9]'), '')}';
+      final vendor = widget.renewal == null
+          ? null
+          : ref.watch(appDataProvider).vendors.cast<Vendor?>().firstWhere(
+                (v) =>
+                    v?.name.trim().toLowerCase() ==
+                        widget.applicant.trim().toLowerCase() ||
+                    v?.id ==
+                        'VND-${widget.id.replaceAll(RegExp(r'[^0-9]'), '')}',
+                orElse: () => null,
+              );
+      final targetVendorId = vendor?.id ??
+          'VND-${widget.id.replaceAll(RegExp(r'[^0-9]'), '')}';
 
       final statusMessage = Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -584,15 +560,17 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
       final actions = Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          FilledButton.icon(
-            onPressed: () {
-              Navigator.pop(context);
-              context.go('/accounts?accountId=$targetVendorId&open=1');
-            },
-            icon: const Icon(Icons.person_outline_rounded, size: 16),
-            label: const Text('View Account Profile'),
-          ),
-          const SizedBox(width: 10),
+          if (widget.renewal != null) ...[
+            FilledButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                context.go('/accounts?accountId=$targetVendorId&open=1');
+              },
+              icon: const Icon(Icons.person_outline_rounded, size: 16),
+              label: const Text('View Account Profile'),
+            ),
+            const SizedBox(width: 10),
+          ],
           OutlinedButton.icon(
             onPressed: processing ? null : _reopenForReview,
             icon: const Icon(Icons.refresh_rounded, size: 16),
@@ -1087,27 +1065,29 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                   return '${widget.applicant.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '.')}@gmail.com';
                 }(),
               ),
-              const SizedBox(height: 4),
-              OutlinedButton.icon(
-                onPressed: () {
-                  final targetId =
-                      'VND-${widget.id.replaceAll(RegExp(r'[^0-9]'), '')}';
-                  Navigator.pop(context);
-                  context.go('/accounts?accountId=$targetId&open=1');
-                },
-                icon: const Icon(Icons.person_outline_rounded, size: 15),
-                label: const Text('View Account Profile'),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(36),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  textStyle: GoogleFonts.inter(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
+              if (renewal != null) ...[
+                const SizedBox(height: 4),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    final targetId =
+                        'VND-${widget.id.replaceAll(RegExp(r'[^0-9]'), '')}';
+                    Navigator.pop(context);
+                    context.go('/accounts?accountId=$targetId&open=1');
+                  },
+                  icon: const Icon(Icons.person_outline_rounded, size: 15),
+                  label: const Text('View Account Profile'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(36),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    textStyle: GoogleFonts.inter(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
