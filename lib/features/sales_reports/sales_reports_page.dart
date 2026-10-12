@@ -1094,19 +1094,6 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
     );
   }
 
-  Widget _paymentStatusBadge(PaymentStatus status) {
-    final (kind, label) = switch (status) {
-      PaymentStatus.paid => (BadgeKind.success, 'Paid'),
-      PaymentStatus.pending => (BadgeKind.warning, 'Pending'),
-      PaymentStatus.failed => (BadgeKind.danger, 'Failed'),
-      PaymentStatus.refunded || PaymentStatus.partiallyRefunded => (
-          BadgeKind.purple,
-          'Refunded'
-        ),
-    };
-    return StatusBadge(label: label, kind: kind);
-  }
-
   Widget _orderStatusBadge(OrderStatus status) {
     final (kind, label) = switch (status) {
       OrderStatus.completed => (BadgeKind.success, 'Completed'),

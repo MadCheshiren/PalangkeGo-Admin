@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:go_router/go_router.dart';
-
+import '../../core/theme/theme_extensions.dart';
 import '../../core/utils/export/admin_export_service.dart';
 import '../../core/utils/export/module_export_data_builders.dart';
 import '../../core/utils/formatters.dart';
@@ -1480,14 +1482,20 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
         child: InkWell(
           onTap: () => showDialog<void>(
             context: context,
-            builder: (context) => Dialog(
-              child: InteractiveViewer(
-                child: Image.asset(
-                  asset,
-                  errorBuilder: (context, error, stackTrace) =>
-                      _missingEvidence(context),
+            builder: (_) => _EvidenceViewerDialog(
+              initialAsset: asset,
+              evidence: const [
+                _EvidenceItem(
+                  asset: 'assets/images/spoiled_produce.png',
+                  label: 'Spoiled produce',
+                  filename: 'spoiled_produce.png',
                 ),
-              ),
+                _EvidenceItem(
+                  asset: 'assets/images/mobile_conversation.png',
+                  label: 'Mobile conversation',
+                  filename: 'mobile_conversation.png',
+                ),
+              ],
             ),
           ),
           child: Column(
@@ -1617,6 +1625,441 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
             fontSize: 9.5,
             fontWeight: isHeader ? FontWeight.w800 : FontWeight.normal,
           ),
+        ),
+      );
+}
+
+class _EvidenceItem {
+  const _EvidenceItem({
+    required this.asset,
+    required this.label,
+    required this.filename,
+  });
+
+  final String asset;
+  final String label;
+  final String filename;
+}
+
+class _EvidenceViewerDialog extends StatefulWidget {
+  const _EvidenceViewerDialog({
+    required this.evidence,
+    required this.initialAsset,
+  });
+
+  final List<_EvidenceItem> evidence;
+  final String initialAsset;
+
+  @override
+  State<_EvidenceViewerDialog> createState() => _EvidenceViewerDialogState();
+}
+
+class _EvidenceViewerDialogState extends State<_EvidenceViewerDialog> {
+  static const _zoomSteps = [1.0, 1.25, 1.5, 1.75, 2.0];
+  final _transformController = TransformationController();
+  int _index = 0;
+  int _zoomIndex = 0;
+  int _reloadToken = 0;
+  bool _isDragging = false;
+  bool _fullView = false;
+
+  _EvidenceItem get _item => widget.evidence[_index];
+
+  @override
+  void initState() {
+    super.initState();
+    _index = widget.evidence.indexWhere(
+      (item) => item.asset == widget.initialAsset,
+    );
+    if (_index < 0) _index = 0;
+  }
+
+  @override
+  void dispose() {
+    _transformController.dispose();
+    super.dispose();
+  }
+
+  void _setZoom(int index) {
+    setState(() => _zoomIndex = index.clamp(0, _zoomSteps.length - 1));
+    final zoom = _zoomSteps[_zoomIndex];
+    _transformController.value = Matrix4.diagonal3Values(zoom, zoom, 1.0);
+  }
+
+  void _changeEvidence(int direction) {
+    final next = _index + direction;
+    if (next < 0 || next >= widget.evidence.length) return;
+    setState(() {
+      _index = next;
+      _zoomIndex = 0;
+      _isDragging = false;
+      _reloadToken++;
+    });
+    _transformController.value = Matrix4.identity();
+  }
+
+  KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.escape) {
+      Navigator.of(context).pop();
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      _changeEvidence(-1);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+      _changeEvidence(1);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  Future<void> _download() async {
+    try {
+      final bytes = await rootBundle.load(_item.asset);
+      await FilePicker.platform.saveFile(
+        dialogTitle: 'Save evidence',
+        fileName: _item.filename,
+        bytes: bytes.buffer.asUint8List(),
+        type: FileType.image,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to download the evidence file.')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = semanticColors(context);
+    final screenSize = MediaQuery.sizeOf(context);
+    final viewerHeight = _fullView
+        ? screenSize.height
+        : (screenSize.height * .72).clamp(420.0, 620.0).toDouble();
+    return Focus(
+      autofocus: true,
+      onKeyEvent: _handleKey,
+      child: Dialog(
+        insetPadding: _fullView
+            ? EdgeInsets.zero
+            : const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        backgroundColor: colors.cardBackground,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+          width: _fullView ? screenSize.width : 720,
+          height: viewerHeight,
+          child: Column(
+            children: [
+              _header(colors),
+              Expanded(child: _imageArea(colors)),
+              _thumbnails(colors),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _header(AppSemanticColors colors) => Container(
+        height: 62,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: colors.cardBackground,
+          border: Border(bottom: BorderSide(color: colors.subtleBorder)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: colors.heroBackground,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.image_outlined, color: colors.heroForeground, size: 20),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Evidence Viewer',
+                    style: TextStyle(
+                      color: colors.primaryText,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    _item.label,
+                    style: TextStyle(color: colors.secondaryText, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            Text(
+              '${_index + 1} of ${widget.evidence.length}',
+              style: TextStyle(
+                color: colors.primaryText,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(width: 18),
+            _toolbarButton(
+              colors: colors,
+              tooltip: 'Zoom in',
+              semanticLabel: 'Zoom in',
+              icon: Icons.zoom_in_outlined,
+              onPressed: _zoomIndex < _zoomSteps.length - 1
+                  ? () => _setZoom(_zoomIndex + 1)
+                  : null,
+            ),
+            const SizedBox(width: 6),
+            _toolbarButton(
+              colors: colors,
+              tooltip: 'Zoom out',
+              semanticLabel: 'Zoom out',
+              icon: Icons.zoom_out_outlined,
+              onPressed: _zoomIndex > 0 ? () => _setZoom(_zoomIndex - 1) : null,
+            ),
+            Container(
+              width: 1,
+              height: 24,
+              margin: const EdgeInsets.symmetric(horizontal: 10),
+              color: colors.subtleBorder,
+            ),
+            _toolbarButton(
+              colors: colors,
+              tooltip: 'Download evidence',
+              semanticLabel: 'Download evidence',
+              icon: Icons.download_outlined,
+              onPressed: _download,
+            ),
+            const SizedBox(width: 6),
+            _toolbarButton(
+              colors: colors,
+              tooltip: 'Open full view',
+              semanticLabel: 'Open evidence in full view',
+              icon: _fullView ? Icons.fullscreen_exit_outlined : Icons.open_in_full_outlined,
+              onPressed: () => setState(() => _fullView = !_fullView),
+            ),
+            const SizedBox(width: 10),
+            _toolbarButton(
+              colors: colors,
+              tooltip: 'Close',
+              semanticLabel: 'Close evidence viewer',
+              icon: Icons.close_rounded,
+              onPressed: () => Navigator.of(context).pop(),
+              close: true,
+            ),
+          ],
+        ),
+      );
+
+  Widget _toolbarButton({
+    required AppSemanticColors colors,
+    required String tooltip,
+    required String semanticLabel,
+    required IconData icon,
+    required VoidCallback? onPressed,
+    bool close = false,
+  }) => Semantics(
+        button: true,
+        label: semanticLabel,
+        child: Tooltip(
+          message: tooltip,
+          child: IconButton(
+            tooltip: tooltip,
+            onPressed: onPressed,
+            icon: Icon(icon, size: 21),
+            style: IconButton.styleFrom(
+              minimumSize: const Size(42, 42),
+              maximumSize: const Size(42, 42),
+              foregroundColor: close ? colors.heroBackground : colors.primaryText,
+              disabledForegroundColor: colors.disabledText,
+              backgroundColor: close
+                  ? colors.heroBackground.withValues(alpha: 0.12)
+                  : colors.tableHeader,
+              side: close ? BorderSide.none : BorderSide(color: colors.subtleBorder),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ),
+      );
+
+  Widget _imageArea(AppSemanticColors colors) => Container(
+        color: Theme.of(context).brightness == Brightness.dark
+            ? const Color(0xFF0F172A)
+            : const Color(0xFFF8FAFC),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(48, 12, 48, 12),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              MouseRegion(
+                cursor: _zoomIndex > 0
+                    ? (_isDragging ? SystemMouseCursors.grabbing : SystemMouseCursors.grab)
+                    : SystemMouseCursors.basic,
+                child: GestureDetector(
+                  onDoubleTap: () => _setZoom(_zoomIndex == 0 ? 2 : 0),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: InteractiveViewer(
+                      transformationController: _transformController,
+                      minScale: 1,
+                      maxScale: 2,
+                      panEnabled: _zoomIndex > 0,
+                      scaleEnabled: false,
+                      boundaryMargin: const EdgeInsets.all(28),
+                      onInteractionStart: (_) {
+                        if (_zoomIndex > 0) setState(() => _isDragging = true);
+                      },
+                      onInteractionEnd: (_) {
+                        if (_isDragging) setState(() => _isDragging = false);
+                      },
+                      child: Image.asset(
+                        _item.asset,
+                        key: ValueKey('${_item.asset}-$_reloadToken'),
+                        width: double.infinity,
+                        height: double.infinity,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) => _errorState(colors),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              if (_index > 0)
+                _arrowButton(colors, Icons.chevron_left_rounded, () => _changeEvidence(-1), Alignment.centerLeft),
+              if (_index < widget.evidence.length - 1)
+                _arrowButton(colors, Icons.chevron_right_rounded, () => _changeEvidence(1), Alignment.centerRight),
+            ],
+          ),
+        ),
+      );
+
+  Widget _arrowButton(AppSemanticColors colors, IconData icon, VoidCallback onPressed, Alignment alignment) => Align(
+        alignment: alignment,
+        child: Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: IconButton(
+            tooltip: icon == Icons.chevron_left_rounded ? 'Previous evidence' : 'Next evidence',
+            onPressed: onPressed,
+            style: IconButton.styleFrom(
+              minimumSize: const Size(44, 44),
+              backgroundColor: colors.cardBackground.withValues(alpha: 0.95),
+              foregroundColor: colors.primaryText,
+              side: BorderSide(color: colors.subtleBorder),
+            ),
+            icon: Icon(icon),
+          ),
+        ),
+      );
+
+  Widget _errorState(AppSemanticColors colors) => ColoredBox(
+        color: colors.tableHeader,
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.broken_image_outlined, color: colors.warning, size: 34),
+              const SizedBox(height: 10),
+              Text(
+                'Unable to load evidence',
+                style: TextStyle(
+                  color: colors.primaryText,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                'The evidence file could not be displayed. Please try again.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: colors.secondaryText, fontSize: 12),
+              ),
+              const SizedBox(height: 14),
+              OutlinedButton.icon(
+                onPressed: () => setState(() => _reloadToken++),
+                icon: const Icon(Icons.refresh_rounded, size: 17),
+                label: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+
+  Widget _thumbnails(AppSemanticColors colors) => Container(
+        height: 100,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        decoration: BoxDecoration(
+          color: colors.cardBackground,
+          border: Border(top: BorderSide(color: colors.subtleBorder)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(widget.evidence.length, (index) {
+            final item = widget.evidence[index];
+            final selected = index == _index;
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 5),
+              child: Semantics(
+                button: true,
+                label: 'View evidence ${index + 1}: ${item.label}',
+                child: InkWell(
+                  onTap: () => _changeEvidence(index - _index),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 100,
+                        height: 62,
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: selected ? colors.heroBackground : colors.subtleBorder,
+                            width: selected ? 2 : 1,
+                          ),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(5),
+                          child: Image.asset(item.asset, fit: BoxFit.cover),
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${index + 1}. ${item.label}',
+                        style: TextStyle(
+                          color: selected ? colors.heroBackground : colors.secondaryText,
+                          fontSize: 9,
+                          fontWeight: selected ? FontWeight.w700 : FontWeight.normal,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
         ),
       );
 }

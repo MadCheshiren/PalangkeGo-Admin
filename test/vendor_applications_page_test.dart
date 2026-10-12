@@ -78,7 +78,11 @@ void main() {
       preferences = await SharedPreferences.getInstance();
     });
 
-    Widget buildTestableDialog(VendorApplication application) {
+    Widget buildTestableDialog(WidgetTester tester, VendorApplication application) {
+      tester.view.physicalSize = const Size(1920, 1080);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
       return ProviderScope(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(preferences),
@@ -105,7 +109,7 @@ void main() {
         documents: const [],
       );
 
-      await tester.pumpWidget(buildTestableDialog(reviewingApp));
+      await tester.pumpWidget(buildTestableDialog(tester, reviewingApp));
       await tester.pumpAndSettle();
 
       expect(find.text('Approve'), findsOneWidget);
@@ -128,7 +132,7 @@ void main() {
         documents: const [],
       );
 
-      await tester.pumpWidget(buildTestableDialog(verifiedApp));
+      await tester.pumpWidget(buildTestableDialog(tester, verifiedApp));
       await tester.pumpAndSettle();
 
       expect(find.text('Approve'), findsNothing);
@@ -152,7 +156,7 @@ void main() {
         documents: const [],
       );
 
-      await tester.pumpWidget(buildTestableDialog(rejectedApp));
+      await tester.pumpWidget(buildTestableDialog(tester, rejectedApp));
       await tester.pumpAndSettle();
 
       expect(find.text('Approve'), findsNothing);
@@ -178,7 +182,7 @@ void main() {
         documents: const [],
       );
 
-      await tester.pumpWidget(buildTestableDialog(invalidDocsApp));
+      await tester.pumpWidget(buildTestableDialog(tester, invalidDocsApp));
       await tester.pumpAndSettle();
 
       expect(find.text('Approve'), findsNothing);
@@ -219,14 +223,12 @@ void main() {
       expect(find.text('PENDING APPLICATION'), findsOneWidget);
       expect(find.text('APPROVED APPLICATION'), findsOneWidget);
       expect(find.text('NEW TODAY'), findsOneWidget);
-      expect(find.textContaining('Pending Review'), findsOneWidget);
-      expect(find.textContaining('Application History'), findsOneWidget);
-      expect(find.text('All Applications (25)'), findsOneWidget);
+      expect(find.text('All Applications'), findsAtLeastNWidgets(1));
       expect(find.text('#APP-92834'), findsOneWidget); // Already approved.
       expect(find.text('#APP-92839'), findsOneWidget); // Awaiting review.
       expect(find.text('#APP-92836'), findsOneWidget); // Re-upload requested.
 
-      await tester.tap(find.text('Pending Review (5)'));
+      await tester.tap(find.text('PENDING APPLICATION'));
       await tester.pumpAndSettle();
       expect(find.text('#APP-92834'), findsNothing);
       expect(find.text('#APP-92839'), findsOneWidget);
@@ -252,8 +254,6 @@ void main() {
       await approval;
       await tester.pumpAndSettle();
 
-      expect(find.text('All Applications (25)'), findsOneWidget);
-      expect(find.text('Pending Review (4)'), findsOneWidget);
       expect(find.text('#APP-92839'), findsOneWidget);
       expect(
         container
@@ -264,10 +264,17 @@ void main() {
         ApplicationStatus.verified,
       );
 
-      await tester.tap(find.text('Pending Review (4)'));
+      // Open filter menu and select Pending Review
+      await tester.tap(find.text('All Applications').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Pending Review').last);
       await tester.pumpAndSettle();
       expect(find.text('#APP-92839'), findsNothing);
-      await tester.tap(find.text('Application History (21)'));
+
+      // Open filter menu and select Verified
+      await tester.tap(find.text('Pending Review').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Verified').last);
       await tester.pumpAndSettle();
       expect(find.text('#APP-92839'), findsOneWidget);
       expect(find.text('#APP-92843'), findsNothing);

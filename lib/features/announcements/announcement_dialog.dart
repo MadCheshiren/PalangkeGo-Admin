@@ -11,7 +11,7 @@ import '../../core/widgets/formatted_text.dart';
 import '../../data/repositories/mock_repository.dart';
 import '../../models/app_models.dart';
 
-const _maxFeatureImageBytes = 50 * 1024 * 1024;
+const _maxFeatureImageBytes = 5 * 1024 * 1024; // 5 MB
 
 class AnnouncementDialog extends ConsumerStatefulWidget {
   const AnnouncementDialog({
@@ -36,17 +36,41 @@ class AnnouncementDialog extends ConsumerStatefulWidget {
 class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
   bool get isEditMode => widget.announcementToEdit != null;
 
-  late final title = TextEditingController(
-    text: widget.announcementToEdit?.title ??
-        widget.initialTitle ??
-        'Public Market Holiday Notice',
+  late final String _initialTitleText = widget.announcementToEdit?.title ??
+      widget.initialTitle ??
+      'New Market Guidelines';
+
+  late final String _initialBodyText = (widget.announcementToEdit?.summary ??
+          widget.initialBody ??
+          'Updated safety protocols for the upcoming weekend market.')
+      .replaceAll('*', '');
+
+  late final String _initialAudienceText = normalizeAudience(
+    widget.announcementToEdit?.audience ?? widget.initialAudience,
   );
-  late final body = FormattedTextEditingController(
-    text: (widget.announcementToEdit?.summary ??
-            widget.initialBody ??
-            'Good day! Please be informed that the PalengkeGo services will be temporarily unavailable on Friday due to the scheduled holiday maintenance. Stall holders are advised to settle transactions early. Thank you!')
-        .replaceAll('*', ''),
-  );
+
+  late final String _initialDurationText = () {
+    final item = widget.announcementToEdit;
+    if (item != null) {
+      if (item.expiresAt == null) return 'Permanent (No Expiry)';
+      final days = item.expiresAt!.difference(item.createdAt).inDays;
+      if (days <= 1) return '1 Day';
+      if (days <= 3) return '3 Days';
+      if (days <= 7) return '7 Days (1 Week)';
+      if (days <= 14) return '14 Days (2 Weeks)';
+      if (days <= 30) return '30 Days (1 Month)';
+      return 'Custom Range (Calendar)';
+    }
+    return 'Permanent (No Expiry)';
+  }();
+
+  late final bool _initialNotifyState = widget.announcementToEdit != null
+      ? widget.announcementToEdit!.notificationType.toLowerCase().contains('push')
+      : widget.initialNotify;
+
+  late final titleController = TextEditingController(text: _initialTitleText);
+  late final bodyController = FormattedTextEditingController(text: _initialBodyText);
+
   static String normalizeAudience(String? raw) {
     if (raw == null) return 'All Users';
     final lower = raw.trim().toLowerCase();
@@ -63,20 +87,38 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
     return 'All Users';
   }
 
-  late String audience = normalizeAudience(
-    widget.announcementToEdit?.audience ?? widget.initialAudience,
-  );
-  late bool notify = widget.announcementToEdit != null
-      ? widget.announcementToEdit!.notificationType.toLowerCase().contains('push')
-      : widget.initialNotify;
+  static String normalizeDuration(String? raw) {
+    if (raw == null) return 'Permanent (No Expiry)';
+    if (raw == '1 Day') return '1 Day';
+    if (raw == '3 Days') return '3 Days';
+    if (raw == '7 Days' || raw == '7 Days (1 Week)') return '7 Days (1 Week)';
+    if (raw == '14 Days' || raw == '14 Days (2 Weeks)') return '14 Days (2 Weeks)';
+    if (raw == '30 Days' || raw == '30 Days (1 Month)') return '30 Days (1 Month)';
+    if (raw == 'Permanent' || raw == 'Permanent (No Expiry)') return 'Permanent (No Expiry)';
+    if (raw == 'Custom Range (Calendar)') return 'Custom Range (Calendar)';
+    return 'Permanent (No Expiry)';
+  }
+
+  late String audience = _initialAudienceText;
+  late String selectedDuration = _initialDurationText;
+  late bool notify = _initialNotifyState;
+
   bool loading = false;
+  bool isPreviewMode = false;
+  String? titleError;
+  String? bodyError;
+
   Uint8List? image;
   Uint8List? originalImageBytes;
+  Uint8List? _initialImageBytes;
   String? imageUrl;
+  String? _initialImageUrl;
   String? imageName;
   int? imageSizeBytes;
   int? imageWidth;
   int? imageHeight;
+
+  DateTimeRange? customDateRange;
 
   @override
   void initState() {
@@ -85,7 +127,9 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
       final item = widget.announcementToEdit!;
       image = item.imageBytes;
       originalImageBytes = item.imageBytes;
+      _initialImageBytes = item.imageBytes;
       imageUrl = item.imageUrl;
+      _initialImageUrl = item.imageUrl;
       if (image != null) {
         imageSizeBytes = image!.lengthInBytes;
         ui.instantiateImageCodec(image!).then((codec) => codec.getNextFrame()).then((frame) {
@@ -98,20 +142,79 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
         }).catchError((_) {});
       }
     }
+    titleController.addListener(_onFormFieldChanged);
+    bodyController.addListener(_onFormFieldChanged);
+  }
+
+  void _onFormFieldChanged() {
+    if (mounted) {
+      if (titleError != null && titleController.text.trim().isNotEmpty) {
+        setState(() => titleError = null);
+      }
+      if (bodyError != null && bodyController.text.trim().isNotEmpty) {
+        setState(() => bodyError = null);
+      }
+      setState(() {});
+    }
   }
 
   @override
   void dispose() {
-    title.dispose();
-    body.dispose();
+    titleController.removeListener(_onFormFieldChanged);
+    bodyController.removeListener(_onFormFieldChanged);
+    titleController.dispose();
+    bodyController.dispose();
     super.dispose();
   }
 
-  /// Wraps selection with openTag (e.g. `<b>`) and closeTag (e.g. `</b>`).
-  /// Unwraps if already present.
+  bool get isDirty {
+    if (titleController.text.trim() != _initialTitleText.trim()) return true;
+    if (bodyController.text.trim() != _initialBodyText.trim()) return true;
+    if (audience != _initialAudienceText) return true;
+    if (selectedDuration != _initialDurationText) return true;
+    if (customDateRange != null) return true;
+    if (notify != _initialNotifyState) return true;
+    if (image != _initialImageBytes) return true;
+    if (imageUrl != _initialImageUrl) return true;
+    return false;
+  }
+
+  Future<bool> _confirmClose() async {
+    if (!isDirty) return true;
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Color(0xFFF59E0B), size: 22),
+            SizedBox(width: 8),
+            Text('Discard Unsaved Changes?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          ],
+        ),
+        content: const Text(
+          'You have unsaved edits in this announcement. Are you sure you want to exit without saving?',
+          style: TextStyle(fontSize: 13),
+        ),
+        actions: [
+          OutlinedButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Keep Editing'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Discard Changes'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
   void _wrapTag(String openTag, String closeTag) {
-    final text = body.text;
-    final sel = body.selection;
+    final text = bodyController.text;
+    final sel = bodyController.selection;
     final start = sel.start;
     final end = sel.end;
 
@@ -119,24 +222,22 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
 
     if (start == end) {
       final insert = '$openTag$closeTag';
-      body.text = text.substring(0, start) + insert + text.substring(start);
-      body.selection = TextSelection.collapsed(offset: start + openTag.length);
+      bodyController.text = text.substring(0, start) + insert + text.substring(start);
+      bodyController.selection = TextSelection.collapsed(offset: start + openTag.length);
       return;
     }
 
     final selected = text.substring(start, end);
 
-    // 1. Direct wrapping check
     if (selected.toLowerCase().startsWith(openTag.toLowerCase()) &&
         selected.toLowerCase().endsWith(closeTag.toLowerCase()) &&
         selected.length >= openTag.length + closeTag.length) {
       final unwrapped = selected.substring(openTag.length, selected.length - closeTag.length);
-      body.text = text.substring(0, start) + unwrapped + text.substring(end);
-      body.selection = TextSelection(baseOffset: start, extentOffset: start + unwrapped.length);
+      bodyController.text = text.substring(0, start) + unwrapped + text.substring(end);
+      bodyController.selection = TextSelection(baseOffset: start, extentOffset: start + unwrapped.length);
       return;
     }
 
-    // 2. Surrounding check
     if (start >= openTag.length && (text.length - end) >= closeTag.length) {
       final before = text.substring(start - openTag.length, start);
       final after = text.substring(end, end + closeTag.length);
@@ -144,16 +245,15 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
           after.toLowerCase() == closeTag.toLowerCase()) {
         final newStart = start - openTag.length;
         final newEnd = end + closeTag.length;
-        body.text = text.substring(0, newStart) + selected + text.substring(newEnd);
-        body.selection = TextSelection(baseOffset: newStart, extentOffset: newStart + selected.length);
+        bodyController.text = text.substring(0, newStart) + selected + text.substring(newEnd);
+        bodyController.selection = TextSelection(baseOffset: newStart, extentOffset: newStart + selected.length);
         return;
       }
     }
 
-    // 3. Wrap selection
     final wrapped = '$openTag$selected$closeTag';
-    body.text = text.substring(0, start) + wrapped + text.substring(end);
-    body.selection = TextSelection(
+    bodyController.text = text.substring(0, start) + wrapped + text.substring(end);
+    bodyController.selection = TextSelection(
       baseOffset: start + openTag.length,
       extentOffset: start + openTag.length + selected.length,
     );
@@ -161,31 +261,100 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
 
   void _toggleBold() => _wrapTag('<b>', '</b>');
   void _toggleItalic() => _wrapTag('<i>', '</i>');
+  void _toggleUnderline() => _wrapTag('<u>', '</u>');
 
   void _toggleBullet() {
-    final text = body.text;
-    final sel = body.selection;
-    if (sel.start < 0) return;
+    final text = bodyController.text;
+    final sel = bodyController.selection;
+    if (sel.start < 0 || sel.end < 0) return;
 
-    final lineStart = text.lastIndexOf('\n', sel.start - 1) + 1;
-    var lineEnd = text.indexOf('\n', sel.start);
-    if (lineEnd < 0) lineEnd = text.length;
+    final start = math.min(sel.start, sel.end);
+    final end = math.max(sel.start, sel.end);
 
-    final line = text.substring(lineStart, lineEnd);
+    final rangeStart = text.lastIndexOf('\n', start - 1) + 1;
+    var rangeEnd = text.indexOf('\n', end);
+    if (rangeEnd < 0) rangeEnd = text.length;
 
-    if (line.startsWith('• ')) {
-      body.text = text.substring(0, lineStart) + line.substring(2) + text.substring(lineEnd);
-      body.selection = TextSelection.collapsed(offset: (sel.start - 2).clamp(lineStart, body.text.length));
+    final lines = text.substring(rangeStart, rangeEnd).split('\n');
+    final prefixPattern = RegExp(r'^(\s*(?:•|\d+\.)\s*)+');
+
+    final allBulleted = lines.every((l) => l.trim().isEmpty || RegExp(r'^\s*•').hasMatch(l)) &&
+        lines.any((l) => l.trim().isNotEmpty);
+
+    final newLines = <String>[];
+    for (final line in lines) {
+      final match = prefixPattern.firstMatch(line);
+      final stripped = match != null ? line.substring(match.end) : line;
+      if (allBulleted) {
+        newLines.add(stripped);
+      } else {
+        newLines.add(stripped.isEmpty ? '' : '• $stripped');
+      }
+    }
+
+    final replacement = newLines.join('\n');
+    bodyController.text = text.substring(0, rangeStart) + replacement + text.substring(rangeEnd);
+    if (start == end) {
+      final lineDiff = replacement.length - text.substring(rangeStart, rangeEnd).length;
+      final newOffset = (start + lineDiff).clamp(rangeStart, rangeStart + replacement.length);
+      bodyController.selection = TextSelection.collapsed(offset: newOffset);
     } else {
-      body.text = '${text.substring(0, lineStart)}• $line${text.substring(lineEnd)}';
-      body.selection = TextSelection.collapsed(offset: sel.start + 2);
+      bodyController.selection = TextSelection(
+        baseOffset: rangeStart,
+        extentOffset: rangeStart + replacement.length,
+      );
+    }
+  }
+
+  void _toggleNumberedList() {
+    final text = bodyController.text;
+    final sel = bodyController.selection;
+    if (sel.start < 0 || sel.end < 0) return;
+
+    final start = math.min(sel.start, sel.end);
+    final end = math.max(sel.start, sel.end);
+
+    final rangeStart = text.lastIndexOf('\n', start - 1) + 1;
+    var rangeEnd = text.indexOf('\n', end);
+    if (rangeEnd < 0) rangeEnd = text.length;
+
+    final lines = text.substring(rangeStart, rangeEnd).split('\n');
+    final prefixPattern = RegExp(r'^(\s*(?:•|\d+\.)\s*)+');
+
+    final allNumbered = lines.every((l) => l.trim().isEmpty || RegExp(r'^\s*\d+\.').hasMatch(l)) &&
+        lines.any((l) => l.trim().isNotEmpty);
+
+    final newLines = <String>[];
+    var num = 1;
+    for (final line in lines) {
+      final match = prefixPattern.firstMatch(line);
+      final stripped = match != null ? line.substring(match.end) : line;
+      if (allNumbered) {
+        newLines.add(stripped);
+      } else {
+        newLines.add(stripped.isEmpty ? '' : '$num. $stripped');
+        if (stripped.isNotEmpty) num++;
+      }
+    }
+
+    final replacement = newLines.join('\n');
+    bodyController.text = text.substring(0, rangeStart) + replacement + text.substring(rangeEnd);
+    if (start == end) {
+      final lineDiff = replacement.length - text.substring(rangeStart, rangeEnd).length;
+      final newOffset = (start + lineDiff).clamp(rangeStart, rangeStart + replacement.length);
+      bodyController.selection = TextSelection.collapsed(offset: newOffset);
+    } else {
+      bodyController.selection = TextSelection(
+        baseOffset: rangeStart,
+        extentOffset: rangeStart + replacement.length,
+      );
     }
   }
 
   Future<void> _insertLink() async {
-    final sel = body.selection;
+    final sel = bodyController.selection;
     final selectedText = sel.start >= 0 && sel.start != sel.end
-        ? body.text.substring(sel.start, sel.end)
+        ? bodyController.text.substring(sel.start, sel.end)
         : '';
 
     final labelController = TextEditingController(text: selectedText);
@@ -194,7 +363,8 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
     final result = await showDialog<(String, String)>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Insert Link', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text('Insert Link', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -202,7 +372,7 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
               controller: labelController,
               decoration: const InputDecoration(
                 labelText: 'Link Text / Label',
-                hintText: 'e.g. PalengkeGo Portal',
+                hintText: 'e.g. PalengkeGo Guidelines',
               ),
               autofocus: selectedText.isEmpty,
             ),
@@ -220,6 +390,7 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0F522E)),
             onPressed: () => Navigator.pop(
               ctx,
               (labelController.text.trim(), urlController.text.trim()),
@@ -241,12 +412,12 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
 
     final displayLabel = label.isEmpty ? url : label;
     final htmlLink = '<a href="$url">$displayLabel</a>';
-    final text = body.text;
+    final text = bodyController.text;
     final start = sel.start >= 0 ? sel.start : text.length;
     final end = sel.start >= 0 ? sel.end : text.length;
 
-    body.text = text.substring(0, start) + htmlLink + text.substring(end);
-    body.selection = TextSelection.collapsed(offset: start + htmlLink.length);
+    bodyController.text = text.substring(0, start) + htmlLink + text.substring(end);
+    bodyController.selection = TextSelection.collapsed(offset: start + htmlLink.length);
   }
 
   String _formatBytes(int bytes) {
@@ -276,7 +447,9 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
     if (bytes.lengthInBytes > _maxFeatureImageBytes) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Feature images must be 50 MB or smaller.')),
+          content: Text('Feature image size must be 5MB or smaller.'),
+          backgroundColor: Color(0xFFEF4444),
+        ),
       );
       return;
     }
@@ -310,7 +483,16 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
   }
 
   Future<void> editImage() async {
-    final bytes = originalImageBytes ?? image;
+    Uint8List? bytes = originalImageBytes ?? image;
+    if (bytes == null && imageUrl != null && imageUrl!.isNotEmpty) {
+      try {
+        if (imageUrl!.startsWith('assets/')) {
+          final data = await DefaultAssetBundle.of(context).load(imageUrl!);
+          bytes = data.buffer.asUint8List();
+          originalImageBytes = bytes;
+        }
+      } catch (_) {}
+    }
     if (bytes == null) return;
     final cropped = await _showImageCropper(bytes);
     if (mounted && cropped != null) {
@@ -405,8 +587,7 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                 const Divider(height: 1, color: Colors.white24),
                 Flexible(
                   child: ClipRRect(
-                    borderRadius:
-                        const BorderRadius.vertical(bottom: Radius.circular(14)),
+                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(14)),
                     child: Container(
                       color: const Color(0xFF020617),
                       alignment: Alignment.center,
@@ -438,39 +619,6 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
     );
   }
 
-  Widget _actionPill({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.black.withValues(alpha: 0.68),
-      borderRadius: BorderRadius.circular(5),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(5),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: Colors.white, size: 14),
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Future<Uint8List?> _showImageCropper(Uint8List bytes) {
     return showDialog<Uint8List>(
       context: context,
@@ -479,8 +627,7 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
     );
   }
 
-  static Widget _buildFloatingDatePicker(
-      BuildContext context, Widget? child) {
+  static Widget _buildFloatingDatePicker(BuildContext context, Widget? child) {
     final media = MediaQuery.of(context);
     final dialogWidth = (media.size.width * 0.9).clamp(320.0, 480.0);
     final dialogHeight = (media.size.height * 0.85).clamp(420.0, 560.0);
@@ -500,7 +647,7 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
             child: Theme(
               data: Theme.of(context).copyWith(
                 colorScheme: Theme.of(context).colorScheme.copyWith(
-                      primary: const Color(0xFF10B981),
+                      primary: const Color(0xFF0F522E),
                     ),
                 datePickerTheme: DatePickerThemeData(
                   shape: RoundedRectangleBorder(
@@ -517,35 +664,6 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
     );
   }
 
-  static String normalizeDuration(String? raw) {
-    if (raw == null) return '7 Days (1 Week)';
-    if (raw == '1 Day') return '1 Day';
-    if (raw == '3 Days') return '3 Days';
-    if (raw == '7 Days' || raw == '7 Days (1 Week)') return '7 Days (1 Week)';
-    if (raw == '14 Days' || raw == '14 Days (2 Weeks)') return '14 Days (2 Weeks)';
-    if (raw == '30 Days' || raw == '30 Days (1 Month)') return '30 Days (1 Month)';
-    if (raw == 'Permanent' || raw == 'Permanent (No Expiry)') return 'Permanent (No Expiry)';
-    if (raw == 'Custom Range (Calendar)') return 'Custom Range (Calendar)';
-    return '7 Days (1 Week)';
-  }
-
-  late String selectedDuration = () {
-    final item = widget.announcementToEdit;
-    if (item != null) {
-      if (item.expiresAt == null) return 'Permanent (No Expiry)';
-      final days = item.expiresAt!.difference(item.createdAt).inDays;
-      if (days <= 1) return '1 Day';
-      if (days <= 3) return '3 Days';
-      if (days <= 7) return '7 Days (1 Week)';
-      if (days <= 14) return '14 Days (2 Weeks)';
-      if (days <= 30) return '30 Days (1 Month)';
-      return 'Custom Range (Calendar)';
-    }
-    return '7 Days (1 Week)';
-  }();
-
-  DateTimeRange? customDateRange;
-
   String get _customDurationLabel {
     final range = customDateRange;
     if (range == null) return '';
@@ -555,13 +673,39 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
         '($days ${days == 1 ? 'day' : 'days'})';
   }
 
+  bool _validate() {
+    final titleText = titleController.text.trim();
+    final bodyText = bodyController.text.trim();
+
+    String? tErr;
+    String? bErr;
+
+    if (titleText.isEmpty) {
+      tErr = 'Announcement title is required.';
+    }
+    if (bodyText.isEmpty) {
+      bErr = 'Message body is required.';
+    } else if (bodyText.length > 1000) {
+      bErr = 'Message body cannot exceed 1,000 characters.';
+    }
+
+    setState(() {
+      titleError = tErr;
+      bodyError = bErr;
+    });
+
+    return tErr == null && bErr == null;
+  }
+
   Future<void> save(bool draft) async {
-    if (title.text.trim().isEmpty || body.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Add a title and message before saving.')),
-      );
+    if (!draft && !_validate()) return;
+    if (draft && titleController.text.trim().isEmpty && bodyController.text.trim().isEmpty) {
+      setState(() {
+        titleError = 'Please add a title or body to save draft.';
+      });
       return;
     }
+
     setState(() => loading = true);
     final data = ref.read(appDataProvider);
     final profile = ref.read(adminProfileProvider);
@@ -583,8 +727,7 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
       computedExpiresAt = now.add(const Duration(days: 14));
     } else if (selectedDuration.startsWith('30 Days')) {
       computedExpiresAt = now.add(const Duration(days: 30));
-    } else if (selectedDuration == 'Custom Range (Calendar)' &&
-        customDateRange != null) {
+    } else if (selectedDuration == 'Custom Range (Calendar)' && customDateRange != null) {
       final end = customDateRange!.end;
       computedExpiresAt = DateTime(end.year, end.month, end.day, 23, 59, 59);
     } else {
@@ -594,8 +737,8 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
     if (widget.announcementToEdit != null) {
       final existing = widget.announcementToEdit!;
       final updated = existing.copyWith(
-        title: title.text.trim(),
-        summary: body.text.trim(),
+        title: titleController.text.trim(),
+        summary: bodyController.text.trim(),
         audience: audience,
         isDraft: draft,
         expiresAt: computedExpiresAt,
@@ -612,7 +755,17 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
       final messenger = ScaffoldMessenger.of(context);
       Navigator.pop(context);
       messenger.showSnackBar(
-        const SnackBar(content: Text('Announcement updated successfully.')),
+        SnackBar(
+          content: Row(
+            children: const [
+              Icon(Icons.check_circle_outline_rounded, color: Colors.white, size: 18),
+              SizedBox(width: 8),
+              Text('Announcement updated successfully.'),
+            ],
+          ),
+          backgroundColor: const Color(0xFF0F522E),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
       return;
     }
@@ -620,8 +773,8 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
     await ref.read(appDataProvider.notifier).addAnnouncement(
           Announcement(
             id: 'ANN-${DateTime.now().millisecondsSinceEpoch}',
-            title: title.text.trim(),
-            summary: body.text.trim(),
+            title: titleController.text.trim(),
+            summary: bodyController.text.trim(),
             audience: audience,
             createdAt: DateTime.now(),
             expiresAt: computedExpiresAt,
@@ -640,11 +793,19 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
     Navigator.pop(context);
     messenger.showSnackBar(
       SnackBar(
-        content: Text(
-          draft
-              ? 'Announcement saved as draft locally.'
-              : 'Announcement queued locally; backend delivery is not configured.',
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_outline_rounded, color: Colors.white, size: 18),
+            const SizedBox(width: 8),
+            Text(
+              draft
+                  ? 'Announcement saved as draft successfully.'
+                  : 'Announcement saved and queued for broadcast.',
+            ),
+          ],
         ),
+        backgroundColor: const Color(0xFF0F522E),
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
@@ -652,535 +813,995 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
   @override
   Widget build(BuildContext context) {
     final colors = semanticColors(context);
-    final narrow = MediaQuery.sizeOf(context).width < 700;
-    return Dialog(
-      insetPadding: EdgeInsets.symmetric(
-        horizontal: narrow ? 12 : 80,
-        vertical: narrow ? 12 : 36,
-      ),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: 760,
-          maxHeight: math.min(680.0, MediaQuery.sizeOf(context).height * 0.8),
+    final mediaWidth = MediaQuery.sizeOf(context).width;
+    final narrow = mediaWidth < 720;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final badgeLabel = isEditMode
+        ? (widget.announcementToEdit!.isDraft ? 'Editing Draft' : 'Editing Post')
+        : 'Draft Mode';
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final shouldClose = await _confirmClose();
+        if (shouldClose && context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        insetPadding: EdgeInsets.symmetric(
+          horizontal: narrow ? 12 : 24,
+          vertical: narrow ? 16 : 28,
         ),
-        child: SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(narrow ? 16 : 28, 22, narrow ? 16 : 28, 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Wrap(
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  Text(
-                    isEditMode
-                        ? 'Edit Announcement'
-                        : 'Compose New Announcement',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      StatusBadge(
-                        label: isEditMode
-                            ? (widget.announcementToEdit!.isDraft
-                                ? 'EDITING DRAFT'
-                                : 'EDITING POST')
-                            : 'DRAFT MODE',
-                        kind: isEditMode
-                            ? (widget.announcementToEdit!.isDraft
-                                ? BadgeKind.neutral
-                                : BadgeKind.warning)
-                            : BadgeKind.success,
-                      ),
-                    ],
-                  ),
-                ],
+        child: Center(
+          child: Container(
+            width: 750,
+            constraints: BoxConstraints(
+              maxWidth: 750,
+              maxHeight: math.min(760.0, MediaQuery.sizeOf(context).height * 0.92),
+            ),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.22),
+                  blurRadius: 28,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+              border: Border.all(
+                color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
               ),
-              const SizedBox(height: 17),
-              const Divider(),
-              const SizedBox(height: 15),
-              const Text(
-                'Announcement Title',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 7),
-              TextField(controller: title),
-              const SizedBox(height: 15),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final useColumn = constraints.maxWidth < 480;
-                  final audienceWidget = Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 18, 16, 16),
+                  child: Row(
                     children: [
-                      const Text(
-                        'Target Audience',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 7),
-                      DropdownButtonFormField<String>(
-                        isExpanded: true,
-                        initialValue: normalizeAudience(audience),
-                        items: const ['All Users', 'Stall Holders', 'Customers']
-                            .map(
-                              (value) => DropdownMenuItem(
-                                value: value,
-                                child: Text(
-                                  value,
-                                  style: const TextStyle(fontSize: 12),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (value) =>
-                            setState(() => audience = normalizeAudience(value)),
-                      ),
-                    ],
-                  );
-
-                  final durationWidget = Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Announcement Duration',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 7),
-                      DropdownButtonFormField<String>(
-                        isExpanded: true,
-                        menuMaxHeight: 240,
-                        initialValue: normalizeDuration(selectedDuration),
-                        items: const [
-                          '1 Day',
-                          '3 Days',
-                          '7 Days (1 Week)',
-                          '14 Days (2 Weeks)',
-                          '30 Days (1 Month)',
-                          'Permanent (No Expiry)',
-                          'Custom Range (Calendar)',
-                        ]
-                            .map(
-                              (value) => DropdownMenuItem(
-                                value: value,
-                                child: Text(
-                                  value,
-                                  style: const TextStyle(fontSize: 12),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (value) async {
-                          if (value == null) return;
-                          if (value == 'Custom Range (Calendar)') {
-                            final now = DateTime.now();
-                            final start = DateUtils.dateOnly(now);
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: customDateRange?.end ??
-                                  now.add(const Duration(days: 7)),
-                              firstDate: start,
-                              lastDate: now.add(const Duration(days: 365)),
-                              barrierColor: Colors.black.withValues(alpha: 0.45),
-                              builder: _buildFloatingDatePicker,
-                            );
-                            if (picked != null) {
-                              setState(() {
-                                selectedDuration = 'Custom Range (Calendar)';
-                                customDateRange = DateTimeRange(
-                                  start: start,
-                                  end: DateTime(
-                                      picked.year, picked.month, picked.day, 23, 59, 59),
-                                );
-                              });
-                            }
-                          } else {
-                            setState(() => selectedDuration = value);
-                          }
-                        },
-                      ),
-                      if (customDateRange != null &&
-                          selectedDuration == 'Custom Range (Calendar)') ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          'Active for: $_customDurationLabel',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: colors.secondaryText,
-                          ),
-                        ),
-                      ],
-                    ],
-                  );
-
-                  if (useColumn) {
-                    return Column(
-                      children: [
-                        audienceWidget,
-                        const SizedBox(height: 15),
-                        durationWidget,
-                      ],
-                    );
-                  }
-
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: audienceWidget),
-                      const SizedBox(width: 14),
-                      Expanded(child: durationWidget),
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Feature Image (Optional)',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-                  ),
-                  if ((image != null || imageUrl != null) && imageWidth != null && imageHeight != null)
-                    Text(
-                      'Real Size: $imageWidth × $imageHeight px • ${_formatBytes(imageSizeBytes ?? (image?.lengthInBytes ?? 0))}',
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w600,
-                        color: colors.accent,
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 7),
-              (image == null && (imageUrl == null || imageUrl!.isEmpty))
-                  ? InkWell(
-                      onTap: pick,
-                      borderRadius: BorderRadius.circular(9),
-                      child: Container(
-                        width: double.infinity,
-                        height: 94,
+                      Container(
+                        width: 36,
+                        height: 36,
                         decoration: BoxDecoration(
-                          color: colors.infoContainer.withValues(alpha: .48),
-                          border: Border.all(
-                              color: colors.info.withValues(alpha: .35)),
-                          borderRadius: BorderRadius.circular(9),
+                          color: isDark ? const Color(0xFF123D31) : const Color(0xFFE6F4EA),
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                        child: Icon(
+                          Icons.edit_note_rounded,
+                          color: isDark ? const Color(0xFF24C58A) : const Color(0xFF0F522E),
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 10,
+                          runSpacing: 4,
                           children: [
-                            Icon(
-                              Icons.add_photo_alternate_outlined,
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurface.withValues(alpha: .7),
-                              size: 26,
-                            ),
                             Text(
-                              'Drag and drop or click to upload',
+                              isEditMode ? 'Edit Announcement' : 'Compose New Announcement',
                               style: TextStyle(
-                                fontSize: 11,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurface.withValues(alpha: .7),
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
+                                color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                letterSpacing: -0.2,
                               ),
                             ),
-                            Text(
-                              'Recommended size: 1200×600px (Max 50MB)',
-                              style: TextStyle(
-                                fontSize: 9,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurface.withValues(alpha: .45),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: isDark ? const Color(0xFF493619) : const Color(0xFFFEF3C7),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: isDark ? const Color(0xFF785418) : const Color(0xFFFDE68A),
+                                ),
+                              ),
+                              child: Text(
+                                badgeLabel,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: isDark ? const Color(0xFFFFBF55) : const Color(0xFF92400E),
+                                ),
                               ),
                             ),
                           ],
                         ),
                       ),
-                    )
-                  : Container(
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF0F172A),
-                        borderRadius: BorderRadius.circular(9),
-                        border: Border.all(color: colors.subtleBorder),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.06),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
+                      IconButton(
+                        onPressed: () async {
+                          if (await _confirmClose() && context.mounted) {
+                            Navigator.of(context).pop();
+                          }
+                        },
+                        icon: Icon(
+                          Icons.close_rounded,
+                          size: 20,
+                          color: isDark ? Colors.white70 : const Color(0xFF64748B),
+                        ),
+                        tooltip: 'Close',
                       ),
-                      clipBehavior: Clip.antiAlias,
-                      child: AspectRatio(
-                        aspectRatio: (imageWidth != null && imageHeight != null && imageHeight! > 0)
-                            ? (imageWidth! / imageHeight!)
-                            : (1200 / 600),
-                        child: Stack(
-                          alignment: Alignment.center,
-                          fit: StackFit.expand,
+                    ],
+                  ),
+                ),
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                ),
+
+                // Scrollable Body Form
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Basic Information Header
+                        Row(
                           children: [
-                            Tooltip(
-                              message: 'Click to view real size in full preview',
-                              child: InkWell(
-                                onTap: () => _showRealSizeDialog(context),
-                                child: image != null
-                                    ? Image.memory(
-                                        image!,
-                                        fit: BoxFit.cover,
-                                      )
-                                    : Image.asset(
-                                        imageUrl!,
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (_, __, ___) => Image.network(
-                                          imageUrl!,
-                                          fit: BoxFit.cover,
-                                        ),
-                                      ),
+                            Icon(
+                              Icons.description_outlined,
+                              size: 18,
+                              color: isDark ? const Color(0xFF24C58A) : const Color(0xFF0F522E),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Basic Information',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: isDark ? Colors.white : const Color(0xFF1E293B),
                               ),
                             ),
-                          Positioned(
-                            top: 8,
-                            left: 8,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.72),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.2)),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+
+                        // Title Field
+                        Text(
+                          'Announcement Title',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.white70 : const Color(0xFF334155),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        TextField(
+                          controller: titleController,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'e.g. New Market Guidelines',
+                            hintStyle: TextStyle(
+                              fontSize: 13.5,
+                              color: isDark ? Colors.white38 : const Color(0xFF94A3B8),
+                            ),
+                            filled: true,
+                            fillColor: isDark ? const Color(0xFF0F172A) : Colors.white,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(
+                                color: titleError != null
+                                    ? const Color(0xFFEF4444)
+                                    : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
                               ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(
-                                    Icons.photo_size_select_actual_outlined,
-                                    size: 13,
-                                    color: Colors.white,
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(
+                                color: titleError != null
+                                    ? const Color(0xFFEF4444)
+                                    : const Color(0xFF0F522E),
+                                width: 1.5,
+                              ),
+                            ),
+                            errorBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(color: Color(0xFFEF4444)),
+                            ),
+                          ),
+                        ),
+                        if (titleError != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            titleError!,
+                            style: const TextStyle(fontSize: 11, color: Color(0xFFEF4444), fontWeight: FontWeight.w500),
+                          ),
+                        ],
+
+                        const SizedBox(height: 18),
+
+                        // Two Column Layout
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            final stackVertical = constraints.maxWidth < 480;
+
+                            final audienceWidget = Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.people_outline_rounded,
+                                      size: 16,
+                                      color: isDark ? const Color(0xFF24C58A) : const Color(0xFF0F522E),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'Target Audience',
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w600,
+                                        color: isDark ? Colors.white70 : const Color(0xFF334155),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                DropdownButtonFormField<String>(
+                                  initialValue: normalizeAudience(audience),
+                                  isExpanded: true,
+                                  style: TextStyle(
+                                    fontSize: 13.5,
+                                    color: isDark ? Colors.white : const Color(0xFF0F172A),
                                   ),
-                                  const SizedBox(width: 5),
+                                  decoration: InputDecoration(
+                                    filled: true,
+                                    fillColor: isDark ? const Color(0xFF0F172A) : Colors.white,
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: BorderSide(
+                                        color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                                      ),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: BorderSide(
+                                        color: isDark ? const Color(0xFF24C58A) : const Color(0xFF0F522E),
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                  ),
+                                  items: const ['All Users', 'Stall Holders', 'Customers']
+                                      .map(
+                                        (val) => DropdownMenuItem(
+                                          value: val,
+                                          child: Text(val, overflow: TextOverflow.ellipsis),
+                                        ),
+                                      )
+                                      .toList(),
+                                  onChanged: (val) {
+                                    if (val != null) setState(() => audience = normalizeAudience(val));
+                                  },
+                                ),
+                              ],
+                            );
+
+                            final durationWidget = Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.calendar_today_outlined,
+                                      size: 15,
+                                      color: isDark ? const Color(0xFF24C58A) : const Color(0xFF0F522E),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Flexible(
+                                      child: Text(
+                                        'Announcement Duration',
+                                        style: TextStyle(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: isDark ? Colors.white70 : const Color(0xFF334155),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                DropdownButtonFormField<String>(
+                                  initialValue: normalizeDuration(selectedDuration),
+                                  isExpanded: true,
+                                  menuMaxHeight: 260,
+                                  style: TextStyle(
+                                    fontSize: 13.5,
+                                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                  ),
+                                  decoration: InputDecoration(
+                                    filled: true,
+                                    fillColor: isDark ? const Color(0xFF0F172A) : Colors.white,
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: BorderSide(
+                                        color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                                      ),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: BorderSide(
+                                        color: isDark ? const Color(0xFF24C58A) : const Color(0xFF0F522E),
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                  ),
+                                  items: const [
+                                    '1 Day',
+                                    '3 Days',
+                                    '7 Days (1 Week)',
+                                    '14 Days (2 Weeks)',
+                                    '30 Days (1 Month)',
+                                    'Permanent (No Expiry)',
+                                    'Custom Range (Calendar)',
+                                  ]
+                                      .map(
+                                        (val) => DropdownMenuItem(
+                                          value: val,
+                                          child: Text(val, overflow: TextOverflow.ellipsis),
+                                        ),
+                                      )
+                                      .toList(),
+                                  onChanged: (val) async {
+                                    if (val == null) return;
+                                    if (val == 'Custom Range (Calendar)') {
+                                      final now = DateTime.now();
+                                      final start = DateUtils.dateOnly(now);
+                                      final picked = await showDatePicker(
+                                        context: context,
+                                        initialDate: customDateRange?.end ?? now.add(const Duration(days: 7)),
+                                        firstDate: start,
+                                        lastDate: now.add(const Duration(days: 365)),
+                                        barrierColor: Colors.black.withValues(alpha: 0.45),
+                                        builder: _buildFloatingDatePicker,
+                                      );
+                                      if (picked != null) {
+                                        setState(() {
+                                          selectedDuration = 'Custom Range (Calendar)';
+                                          customDateRange = DateTimeRange(
+                                            start: start,
+                                            end: DateTime(picked.year, picked.month, picked.day, 23, 59, 59),
+                                          );
+                                        });
+                                      }
+                                    } else {
+                                      setState(() => selectedDuration = val);
+                                    }
+                                  },
+                                ),
+                                if (customDateRange != null && selectedDuration == 'Custom Range (Calendar)') ...[
+                                  const SizedBox(height: 5),
                                   Text(
-                                    'Real Size: ${imageWidth ?? 0} × ${imageHeight ?? 0} px • ${_formatBytes(imageSizeBytes ?? (image?.lengthInBytes ?? 0))}${imageWidth != null && imageHeight != null ? ' (${_aspectRatioString(imageWidth!, imageHeight!)})' : ''}',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 10.5,
+                                    'Active: $_customDurationLabel',
+                                    style: TextStyle(
+                                      fontSize: 11,
                                       fontWeight: FontWeight.w600,
+                                      color: isDark ? const Color(0xFF24C58A) : const Color(0xFF0F522E),
                                     ),
                                   ),
                                 ],
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            top: 8,
-                            right: 8,
-                            child: Material(
-                              color: Colors.black.withValues(alpha: 0.68),
-                              shape: const CircleBorder(),
-                              child: IconButton(
-                                onPressed: () => setState(() {
-                                  image = null;
-                                  originalImageBytes = null;
-                                  imageUrl = null;
-                                  imageName = null;
-                                  imageSizeBytes = null;
-                                  imageWidth = null;
-                                  imageHeight = null;
-                                }),
-                                tooltip: 'Remove feature image',
-                                icon: const Icon(Icons.close_rounded),
-                                iconSize: 18,
-                                color: Colors.white,
-                                constraints: const BoxConstraints(
-                                  minWidth: 32,
-                                  minHeight: 32,
-                                ),
-                                padding: EdgeInsets.zero,
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            right: 8,
-                            bottom: 8,
-                            child: Wrap(
-                              spacing: 6,
-                              children: [
-                                _actionPill(
-                                  icon: Icons.zoom_in_rounded,
-                                  label: 'View Real Size',
-                                  onTap: () => _showRealSizeDialog(context),
-                                ),
-                                _actionPill(
-                                  icon: Icons.crop_rounded,
-                                  label: 'Edit/Crop',
-                                  onTap: editImage,
-                                ),
-                                _actionPill(
-                                  icon: Icons.refresh_rounded,
-                                  label: 'Change',
-                                  onTap: pick,
-                                ),
                               ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-              const SizedBox(height: 16),
-              const Text(
-                'Message Body',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 7),
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: colors.subtleBorder),
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: Column(
-                  children: [
-                    Container(
-                      height: 36,
-                      color: colors.tableHeader,
-                      child: Row(
-                        children: [
-                          IconButton(
-                            onPressed: _toggleBold,
-                            tooltip: 'Bold',
-                            icon: const Icon(
-                              Icons.format_bold_rounded,
-                              size: 17,
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: _toggleItalic,
-                            tooltip: 'Italic',
-                            icon: const Icon(
-                              Icons.format_italic_rounded,
-                              size: 17,
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: _toggleBullet,
-                            tooltip: 'Bullet list',
-                            icon: const Icon(
-                              Icons.format_list_bulleted_rounded,
-                              size: 17,
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: _insertLink,
-                            tooltip: 'Insert link',
-                            icon: const Icon(Icons.link_rounded, size: 17),
-                          ),
-                        ],
-                      ),
-                    ),
-                    TextField(
-                      controller: body,
-                      minLines: 4,
-                      maxLines: 6,
-                      decoration: const InputDecoration(
-                        border: InputBorder.none,
-                        fillColor: Colors.transparent,
-                        filled: true,
-                        contentPadding: EdgeInsets.all(12),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final notifyRow = ConstrainedBox(
-                    constraints:
-                        BoxConstraints(maxWidth: constraints.maxWidth),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: Checkbox(
-                            value: notify,
-                            onChanged: (value) =>
-                                setState(() => notify = value ?? false),
-                          ),
+                            );
+
+                            if (stackVertical) {
+                              return Column(
+                                children: [
+                                  audienceWidget,
+                                  const SizedBox(height: 14),
+                                  durationWidget,
+                                ],
+                              );
+                            }
+
+                            return Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(child: audienceWidget),
+                                const SizedBox(width: 16),
+                                Expanded(child: durationWidget),
+                              ],
+                            );
+                          },
                         ),
-                        const SizedBox(width: 5),
-                        const Flexible(
-                          child: Text(
-                            'Send push notification to mobile app',
-                            style: TextStyle(fontSize: 11),
+
+                        const SizedBox(height: 18),
+
+                        // Feature Image Section
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.image_outlined,
+                              size: 16,
+                              color: isDark ? const Color(0xFF24C58A) : const Color(0xFF0F522E),
+                            ),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                'Feature Image (Optional)',
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark ? Colors.white70 : const Color(0xFF334155),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+
+                        (image == null && (imageUrl == null || imageUrl!.isEmpty))
+                            ? InkWell(
+                                onTap: pick,
+                                borderRadius: BorderRadius.circular(10),
+                                child: CustomPaint(
+                                  painter: _DashedBorderPainter(
+                                    color: isDark ? const Color(0xFF24C58A) : const Color(0xFF86EFAC),
+                                    radius: 10,
+                                  ),
+                                  child: Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+                                    decoration: BoxDecoration(
+                                      color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF0FDF4),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        const Icon(
+                                          Icons.cloud_upload_outlined,
+                                          color: Color(0xFF16A34A),
+                                          size: 30,
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          'Drag and drop an image, or click to upload',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            color: isDark ? Colors.white : const Color(0xFF1E293B),
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                        const SizedBox(height: 3),
+                                        Text(
+                                          'Recommended size: 1200 × 600px (Max 5MB)',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: isDark ? Colors.white54 : const Color(0xFF64748B),
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : Container(
+                                width: double.infinity,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF0F172A),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: colors.subtleBorder),
+                                ),
+                                clipBehavior: Clip.antiAlias,
+                                child: Column(
+                                  children: [
+                                    AspectRatio(
+                                      aspectRatio: (imageWidth != null && imageHeight != null && imageHeight! > 0)
+                                          ? (imageWidth! / imageHeight!)
+                                          : (1200 / 600),
+                                      child: Stack(
+                                        fit: StackFit.expand,
+                                        children: [
+                                          InkWell(
+                                            onTap: () => _showRealSizeDialog(context),
+                                            child: image != null
+                                                ? Image.memory(
+                                                    image!,
+                                                    fit: BoxFit.cover,
+                                                  )
+                                                : Image.asset(
+                                                    imageUrl!,
+                                                    fit: BoxFit.cover,
+                                                    errorBuilder: (_, __, ___) => Image.network(
+                                                      imageUrl!,
+                                                      fit: BoxFit.cover,
+                                                    ),
+                                                  ),
+                                          ),
+                                          Positioned(
+                                            top: 8,
+                                            left: 8,
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: Colors.black.withValues(alpha: 0.75),
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: Text(
+                                                '${imageWidth ?? 1200} × ${imageHeight ?? 600} px',
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 10.5,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              imageName ?? 'Feature Image Loaded',
+                                              style: TextStyle(
+                                                fontSize: 11.5,
+                                                fontWeight: FontWeight.w600,
+                                                color: isDark ? Colors.white : const Color(0xFF334155),
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          OutlinedButton.icon(
+                                            onPressed: editImage,
+                                            icon: Icon(
+                                              Icons.crop_rounded,
+                                              size: 14,
+                                              color: isDark ? const Color(0xFF24C58A) : const Color(0xFF0F522E),
+                                            ),
+                                            label: Text(
+                                              'Edit Picture',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                color: isDark ? Colors.white : const Color(0xFF0F522E),
+                                              ),
+                                            ),
+                                            style: OutlinedButton.styleFrom(
+                                              side: BorderSide(
+                                                color: isDark ? const Color(0xFF33415E) : const Color(0xFFCBD5E1),
+                                              ),
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                              minimumSize: Size.zero,
+                                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          OutlinedButton.icon(
+                                            onPressed: pick,
+                                            icon: Icon(
+                                              Icons.refresh_rounded,
+                                              size: 14,
+                                              color: isDark ? Colors.white70 : const Color(0xFF334155),
+                                            ),
+                                            label: Text(
+                                              'Replace Image',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                color: isDark ? Colors.white : const Color(0xFF334155),
+                                              ),
+                                            ),
+                                            style: OutlinedButton.styleFrom(
+                                              side: BorderSide(
+                                                color: isDark ? const Color(0xFF33415E) : const Color(0xFFCBD5E1),
+                                              ),
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                              minimumSize: Size.zero,
+                                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          OutlinedButton.icon(
+                                            onPressed: () => setState(() {
+                                              image = null;
+                                              originalImageBytes = null;
+                                              imageUrl = null;
+                                              imageName = null;
+                                              imageSizeBytes = null;
+                                              imageWidth = null;
+                                              imageHeight = null;
+                                            }),
+                                            icon: const Icon(Icons.delete_outline_rounded, size: 14, color: Color(0xFFEF4444)),
+                                            label: const Text('Remove', style: TextStyle(fontSize: 11, color: Color(0xFFEF4444))),
+                                            style: OutlinedButton.styleFrom(
+                                              side: BorderSide(
+                                                color: isDark ? const Color(0xFF7F1D1D) : const Color(0xFFFCA5A5),
+                                              ),
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                              minimumSize: Size.zero,
+                                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                        const SizedBox(height: 18),
+
+                        // Message Body Rich Text Editor Section
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.edit_note_rounded,
+                              size: 18,
+                              color: isDark ? const Color(0xFF24C58A) : const Color(0xFF0F522E),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Message Body',
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? Colors.white70 : const Color(0xFF334155),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+
+                        Container(
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF0F172A) : Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: bodyError != null
+                                  ? const Color(0xFFEF4444)
+                                  : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              // Toolbar Header
+                              Container(
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                                  borderRadius: const BorderRadius.vertical(top: Radius.circular(9)),
+                                  border: Border(
+                                    bottom: BorderSide(
+                                      color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                                    ),
+                                  ),
+                                ),
+                                child: SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                                  child: Row(
+                                    children: [
+                                      IconButton(
+                                        onPressed: _toggleBold,
+                                        tooltip: 'Bold',
+                                        icon: Icon(
+                                          Icons.format_bold_rounded,
+                                          size: 17,
+                                          color: isDark ? Colors.white : const Color(0xFF334155),
+                                        ),
+                                      ),
+                                      IconButton(
+                                        onPressed: _toggleItalic,
+                                        tooltip: 'Italic',
+                                        icon: Icon(
+                                          Icons.format_italic_rounded,
+                                          size: 17,
+                                          color: isDark ? Colors.white : const Color(0xFF334155),
+                                        ),
+                                      ),
+                                      IconButton(
+                                        onPressed: _toggleUnderline,
+                                        tooltip: 'Underline',
+                                        icon: Icon(
+                                          Icons.format_underlined_rounded,
+                                          size: 17,
+                                          color: isDark ? Colors.white : const Color(0xFF334155),
+                                        ),
+                                      ),
+                                      IconButton(
+                                        onPressed: _toggleBullet,
+                                        tooltip: 'Bulleted List',
+                                        icon: Icon(
+                                          Icons.format_list_bulleted_rounded,
+                                          size: 17,
+                                          color: isDark ? Colors.white : const Color(0xFF334155),
+                                        ),
+                                      ),
+                                      IconButton(
+                                        onPressed: _toggleNumberedList,
+                                        tooltip: 'Numbered List',
+                                        icon: Icon(
+                                          Icons.format_list_numbered_rounded,
+                                          size: 17,
+                                          color: isDark ? Colors.white : const Color(0xFF334155),
+                                        ),
+                                      ),
+                                      IconButton(
+                                        onPressed: _insertLink,
+                                        tooltip: 'Insert Link',
+                                        icon: Icon(
+                                          Icons.link_rounded,
+                                          size: 17,
+                                          color: isDark ? Colors.white : const Color(0xFF334155),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      TextButton.icon(
+                                        onPressed: () => setState(() => isPreviewMode = !isPreviewMode),
+                                        icon: Icon(
+                                          isPreviewMode ? Icons.edit_outlined : Icons.visibility_outlined,
+                                          size: 15,
+                                          color: isDark ? const Color(0xFF24C58A) : const Color(0xFF0F522E),
+                                        ),
+                                        label: Text(
+                                          isPreviewMode ? 'Edit' : 'Preview',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: isDark ? const Color(0xFF24C58A) : const Color(0xFF0F522E),
+                                          ),
+                                        ),
+                                        style: TextButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          minimumSize: Size.zero,
+                                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+
+                              // Text Area / Preview
+                              if (!isPreviewMode)
+                                TextField(
+                                  controller: bodyController,
+                                  minLines: 4,
+                                  maxLines: 6,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    height: 1.45,
+                                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                  ),
+                                  decoration: InputDecoration(
+                                    border: InputBorder.none,
+                                    fillColor: Colors.transparent,
+                                    filled: true,
+                                    contentPadding: const EdgeInsets.all(12),
+                                    hintText: 'Enter announcement message content...',
+                                    hintStyle: TextStyle(
+                                      fontSize: 13.5,
+                                      color: isDark ? Colors.white38 : const Color(0xFF94A3B8),
+                                    ),
+                                  ),
+                                )
+                              else
+                                Container(
+                                  padding: const EdgeInsets.all(14),
+                                  constraints: const BoxConstraints(minHeight: 110),
+                                  child: FormattedSelectableText(
+                                    bodyController.text.isEmpty
+                                        ? '*(Empty message body)*'
+                                        : bodyController.text,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      height: 1.45,
+                                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                ),
+
+                              // Character Counter & Error Row
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+                                child: Row(
+                                  children: [
+                                    if (bodyError != null)
+                                      Expanded(
+                                        child: Text(
+                                          bodyError!,
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            color: Color(0xFFEF4444),
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      )
+                                    else
+                                      const Spacer(),
+                                    Text(
+                                      '${bodyController.text.length} / 1,000 characters',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w500,
+                                        color: bodyController.text.length > 1000
+                                            ? const Color(0xFFEF4444)
+                                            : (isDark ? Colors.white54 : const Color(0xFF64748B)),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
-                  );
+                  ),
+                ),
 
-                  final buttons = [
-                    OutlinedButton(
-                      onPressed: loading ? null : () => save(true),
-                      child: Text(
-                        isEditMode ? 'Save as Draft' : 'Drafts',
-                        style: const TextStyle(fontSize: 11),
-                      ),
-                    ),
-                    FilledButton.icon(
-                      onPressed: loading ? null : () => save(false),
-                      icon: loading
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                ),
+
+                // Footer
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final notifyRow = ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: constraints.maxWidth),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: Checkbox(
+                                value: notify,
+                                activeColor: isDark ? const Color(0xFF24C58A) : const Color(0xFF0F522E),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                                onChanged: (val) => setState(() => notify = val ?? false),
                               ),
-                            )
-                          : Icon(
-                              isEditMode
-                                  ? Icons.check_rounded
-                                  : Icons.send_rounded,
-                              size: 14,
                             ),
-                      label: Text(
-                        isEditMode ? 'Save Changes' : 'Send Announcement',
-                        style: const TextStyle(fontSize: 11),
-                      ),
-                    ),
-                  ];
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                'Send push notification to mobile app',
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w500,
+                                  color: isDark ? Colors.white70 : const Color(0xFF334155),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 5),
+                            Tooltip(
+                              message: 'Sends an instant push notification to all users on the mobile app upon saving.',
+                              child: Icon(
+                                Icons.info_outline,
+                                size: 15,
+                                color: isDark ? Colors.white70 : const Color(0xFF64748B),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
 
-                  return Wrap(
-                    alignment: WrapAlignment.spaceBetween,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: [
-                      notifyRow,
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
+                      final isSaveDisabled = loading || (isEditMode && !isDirty);
+
+                      final buttons = [
+                        OutlinedButton.icon(
+                          onPressed: loading ? null : () => save(true),
+                          icon: Icon(
+                            Icons.description_outlined,
+                            size: 16,
+                            color: isDark ? Colors.white70 : const Color(0xFF334155),
+                          ),
+                          label: const Text('Save as Draft'),
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
+                            foregroundColor: isDark ? Colors.white : const Color(0xFF334155),
+                            side: BorderSide(
+                              color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            minimumSize: const Size(0, 42),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                        FilledButton.icon(
+                          onPressed: isSaveDisabled ? null : () => save(false),
+                          icon: loading
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : Icon(
+                                  isEditMode ? Icons.check_rounded : Icons.send_rounded,
+                                  size: 16,
+                                  color: Colors.white,
+                                ),
+                          label: Text(
+                            loading
+                                ? 'Saving…'
+                                : (isEditMode ? 'Save Changes' : 'Send Announcement'),
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: isDark ? const Color(0xFF10B981) : const Color(0xFF0F522E),
+                            foregroundColor: Colors.white,
+                            disabledBackgroundColor: isDark
+                                ? const Color(0xFF334155)
+                                : const Color(0xFFCBD5E1),
+                            disabledForegroundColor: isDark
+                                ? Colors.white38
+                                : const Color(0xFF94A3B8),
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                            minimumSize: const Size(0, 42),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ];
+
+                      return Wrap(
+                        alignment: WrapAlignment.spaceBetween,
                         crossAxisAlignment: WrapCrossAlignment.center,
-                        children: buttons,
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ],
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: [
+                          notifyRow,
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: buttons,
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1200,8 +1821,7 @@ class AnnouncementImageCropDialog extends StatefulWidget {
 
 enum _CropDragTarget { none, move, topLeft, topRight, bottomLeft, bottomRight }
 
-class _AnnouncementImageCropDialogState
-    extends State<AnnouncementImageCropDialog> {
+class _AnnouncementImageCropDialogState extends State<AnnouncementImageCropDialog> {
   late final Future<ui.Image> _decodedImage = _decodeImage(widget.bytes);
 
   Rect? _imageRect;
@@ -1221,7 +1841,6 @@ class _AnnouncementImageCropDialogState
     if (_lastCanvasSize == canvasSize && _imageRect != null) return;
     _lastCanvasSize = canvasSize;
 
-    // 1. Calculate imageRect: fit source into canvasSize with natural aspect ratio (NEVER STRETCHED)
     final imageAspect = source.width / source.height;
     final canvasAspect = canvasSize.width / canvasSize.height;
     Rect imgRect;
@@ -1238,7 +1857,6 @@ class _AnnouncementImageCropDialogState
     }
     _imageRect = imgRect;
 
-    // 2. Initialize 2:1 cropRect inside imgRect
     double initW;
     double initH;
     if (imgRect.width / imgRect.height > 2.0) {
@@ -1283,9 +1901,7 @@ class _AnnouncementImageCropDialogState
   }
 
   void _onPanUpdate(DragUpdateDetails details) {
-    if (_imageRect == null ||
-        _cropRect == null ||
-        _activeDrag == _CropDragTarget.none) {
+    if (_imageRect == null || _cropRect == null || _activeDrag == _CropDragTarget.none) {
       return;
     }
     final delta = details.delta;
@@ -1373,14 +1989,10 @@ class _AnnouncementImageCropDialogState
     final scaleX = source.width / img.width;
     final scaleY = source.height / img.height;
 
-    final srcLeft =
-        ((crop.left - img.left) * scaleX).clamp(0.0, source.width.toDouble());
-    final srcTop =
-        ((crop.top - img.top) * scaleY).clamp(0.0, source.height.toDouble());
-    final srcWidth =
-        (crop.width * scaleX).clamp(1.0, source.width.toDouble() - srcLeft);
-    final srcHeight =
-        (crop.height * scaleY).clamp(1.0, source.height.toDouble() - srcTop);
+    final srcLeft = ((crop.left - img.left) * scaleX).clamp(0.0, source.width.toDouble());
+    final srcTop = ((crop.top - img.top) * scaleY).clamp(0.0, source.height.toDouble());
+    final srcWidth = (crop.width * scaleX).clamp(1.0, source.width.toDouble() - srcLeft);
+    final srcHeight = (crop.height * scaleY).clamp(1.0, source.height.toDouble() - srcTop);
 
     const outputWidth = 1200;
     const outputHeight = 600;
@@ -1403,9 +2015,7 @@ class _AnnouncementImageCropDialogState
     if (data.lengthInBytes > _maxFeatureImageBytes) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'The cropped image is over 50 MB. Reduce the crop area and try again.',
-          ),
+          content: Text('The cropped image exceeds 5MB. Reduce crop size.'),
         ),
       );
       return;
@@ -1415,18 +2025,15 @@ class _AnnouncementImageCropDialogState
 
   MouseCursor get _cursor => switch (_hoverTarget) {
         _CropDragTarget.move => SystemMouseCursors.move,
-        _CropDragTarget.topLeft ||
-        _CropDragTarget.bottomRight =>
-          SystemMouseCursors.resizeUpLeftDownRight,
-        _CropDragTarget.topRight ||
-        _CropDragTarget.bottomLeft =>
-          SystemMouseCursors.resizeUpRightDownLeft,
+        _CropDragTarget.topLeft || _CropDragTarget.bottomRight => SystemMouseCursors.resizeUpLeftDownRight,
+        _CropDragTarget.topRight || _CropDragTarget.bottomLeft => SystemMouseCursors.resizeUpRightDownLeft,
         _CropDragTarget.none => SystemMouseCursors.basic,
       };
 
   @override
   Widget build(BuildContext context) {
     final colors = semanticColors(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final dialogWidth = math.min(
       740.0,
       math.max(340.0, MediaQuery.sizeOf(context).width - 64.0),
@@ -1498,7 +2105,7 @@ class _AnnouncementImageCropDialogState
                               source: source,
                               imageRect: _imageRect!,
                               cropRect: _cropRect!,
-                              accentColor: colors.accent,
+                              accentColor: isDark ? const Color(0xFF10B981) : const Color(0xFF0F522E),
                             ),
                           ),
                         ),
@@ -1510,25 +2117,16 @@ class _AnnouncementImageCropDialogState
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
                         color: colors.infoContainer.withValues(alpha: 0.5),
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color: colors.info.withValues(alpha: 0.3),
-                        ),
+                        border: Border.all(color: colors.info.withValues(alpha: 0.3)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
-                            Icons.aspect_ratio_rounded,
-                            size: 14,
-                            color: colors.info,
-                          ),
+                          Icon(Icons.aspect_ratio_rounded, size: 14, color: colors.info),
                           const SizedBox(width: 5),
                           Text(
                             'Target: 1200 × 600 px (2:1)',
@@ -1543,16 +2141,16 @@ class _AnnouncementImageCropDialogState
                     ),
                     const Spacer(),
                     TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: isDark ? colors.secondaryText : colors.primaryText,
+                      ),
                       onPressed: () {
                         setState(() {
                           _lastCanvasSize = null;
                         });
                       },
                       icon: const Icon(Icons.restart_alt_rounded, size: 16),
-                      label: const Text(
-                        'Reset Crop',
-                        style: TextStyle(fontSize: 11),
-                      ),
+                      label: const Text('Reset Crop', style: TextStyle(fontSize: 11)),
                     ),
                   ],
                 ),
@@ -1563,16 +2161,34 @@ class _AnnouncementImageCropDialogState
       ),
       actions: [
         TextButton(
+          style: TextButton.styleFrom(
+            foregroundColor: isDark ? const Color(0xFFFF7A84) : const Color(0xFFEF4444),
+          ),
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: const Text(
+            'Cancel',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
         ),
         FutureBuilder<ui.Image>(
           future: _decodedImage,
           builder: (context, snapshot) => FilledButton.icon(
-            onPressed:
-                snapshot.hasData ? () => _confirmCrop(snapshot.data!) : null,
+            style: FilledButton.styleFrom(
+              backgroundColor: isDark ? const Color(0xFF10B981) : const Color(0xFF0F522E),
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: isDark
+                  ? const Color(0xFF334155)
+                  : const Color(0xFFCBD5E1),
+              disabledForegroundColor: isDark
+                  ? Colors.white38
+                  : const Color(0xFF94A3B8),
+            ),
+            onPressed: snapshot.hasData ? () => _confirmCrop(snapshot.data!) : null,
             icon: const Icon(Icons.check_rounded, size: 16),
-            label: const Text('Apply Crop'),
+            label: const Text(
+              'Apply Crop',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
           ),
         ),
       ],
@@ -1595,125 +2211,110 @@ class _GalleryCropPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // 1. Draw source image into imageRect maintaining 100% true aspect ratio (NEVER STRETCHED)
+    final paint = Paint()..filterQuality = FilterQuality.high;
     canvas.drawImageRect(
       source,
       Rect.fromLTWH(0, 0, source.width.toDouble(), source.height.toDouble()),
       imageRect,
-      Paint()..filterQuality = FilterQuality.high,
+      paint,
     );
 
-    // 2. Darkened scrim overlay outside cropRect
-    final scrimPath = Path()
-      ..fillType = PathFillType.evenOdd
-      ..addRect(Offset.zero & size)
-      ..addRect(cropRect);
+    final dimPaint = Paint()..color = Colors.black.withValues(alpha: 0.6);
     canvas.drawPath(
-      scrimPath,
-      Paint()..color = Colors.black.withValues(alpha: 0.62),
+      Path.combine(
+        PathOperation.difference,
+        Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height)),
+        Path()..addRect(cropRect),
+      ),
+      dimPaint,
     );
 
-    // 3. Crisp white crop border
     final borderPaint = Paint()
       ..color = Colors.white
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
+      ..strokeWidth = 2.0;
     canvas.drawRect(cropRect, borderPaint);
 
-    // 4. Rule of Thirds grid lines inside cropRect
     final gridPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.45)
+      ..color = Colors.white.withValues(alpha: 0.35)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0;
 
-    final thirdW = cropRect.width / 3.0;
-    final thirdH = cropRect.height / 3.0;
+    final w3 = cropRect.width / 3;
+    final h3 = cropRect.height / 3;
+    canvas.drawLine(Offset(cropRect.left + w3, cropRect.top), Offset(cropRect.left + w3, cropRect.bottom), gridPaint);
+    canvas.drawLine(Offset(cropRect.left + w3 * 2, cropRect.top), Offset(cropRect.left + w3 * 2, cropRect.bottom), gridPaint);
+    canvas.drawLine(Offset(cropRect.left, cropRect.top + h3), Offset(cropRect.right, cropRect.top + h3), gridPaint);
+    canvas.drawLine(Offset(cropRect.left, cropRect.top + h3 * 2), Offset(cropRect.right, cropRect.top + h3 * 2), gridPaint);
 
-    // Vertical grid lines
-    canvas.drawLine(
-      Offset(cropRect.left + thirdW, cropRect.top),
-      Offset(cropRect.left + thirdW, cropRect.bottom),
-      gridPaint,
-    );
-    canvas.drawLine(
-      Offset(cropRect.left + thirdW * 2, cropRect.top),
-      Offset(cropRect.left + thirdW * 2, cropRect.bottom),
-      gridPaint,
-    );
-
-    // Horizontal grid lines
-    canvas.drawLine(
-      Offset(cropRect.left, cropRect.top + thirdH),
-      Offset(cropRect.right, cropRect.top + thirdH),
-      gridPaint,
-    );
-    canvas.drawLine(
-      Offset(cropRect.left, cropRect.top + thirdH * 2),
-      Offset(cropRect.right, cropRect.top + thirdH * 2),
-      gridPaint,
-    );
-
-    // 5. Gallery-style thick corner handles (L-shaped corner brackets)
-    final cornerPaint = Paint()
+    final handlePaint = Paint()
+      ..color = accentColor
+      ..style = PaintingStyle.fill;
+    final handleStroke = Paint()
       ..color = Colors.white
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.5
-      ..strokeCap = StrokeCap.square;
+      ..strokeWidth = 2.0;
 
-    const cornerLen = 20.0;
-
-    // Top-Left
-    canvas.drawLine(
-      cropRect.topLeft,
-      cropRect.topLeft + const Offset(cornerLen, 0),
-      cornerPaint,
-    );
-    canvas.drawLine(
-      cropRect.topLeft,
-      cropRect.topLeft + const Offset(0, cornerLen),
-      cornerPaint,
-    );
-
-    // Top-Right
-    canvas.drawLine(
-      cropRect.topRight,
-      cropRect.topRight - const Offset(cornerLen, 0),
-      cornerPaint,
-    );
-    canvas.drawLine(
-      cropRect.topRight,
-      cropRect.topRight + const Offset(0, cornerLen),
-      cornerPaint,
-    );
-
-    // Bottom-Left
-    canvas.drawLine(
-      cropRect.bottomLeft,
-      cropRect.bottomLeft + const Offset(cornerLen, 0),
-      cornerPaint,
-    );
-    canvas.drawLine(
-      cropRect.bottomLeft,
-      cropRect.bottomLeft - const Offset(0, cornerLen),
-      cornerPaint,
-    );
-
-    // Bottom-Right
-    canvas.drawLine(
-      cropRect.bottomRight,
-      cropRect.bottomRight - const Offset(cornerLen, 0),
-      cornerPaint,
-    );
-    canvas.drawLine(
-      cropRect.bottomRight,
-      cropRect.bottomRight - const Offset(0, cornerLen),
-      cornerPaint,
-    );
+    const r = 8.0;
+    for (final corner in [cropRect.topLeft, cropRect.topRight, cropRect.bottomLeft, cropRect.bottomRight]) {
+      canvas.drawCircle(corner, r, handlePaint);
+      canvas.drawCircle(corner, r, handleStroke);
+    }
   }
 
   @override
-  bool shouldRepaint(covariant _GalleryCropPainter oldDelegate) =>
-      oldDelegate.cropRect != cropRect ||
-      oldDelegate.imageRect != imageRect ||
-      oldDelegate.source != source;
+  bool shouldRepaint(covariant _GalleryCropPainter oldDelegate) {
+    return oldDelegate.source != source ||
+        oldDelegate.imageRect != imageRect ||
+        oldDelegate.cropRect != cropRect ||
+        oldDelegate.accentColor != accentColor;
+  }
+}
+
+class _DashedBorderPainter extends CustomPainter {
+  _DashedBorderPainter({
+    required this.color,
+    this.radius = 10,
+  });
+
+  final Color color;
+  final double radius;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+
+    final RRect rrect = RRect.fromLTRBR(
+      0.75,
+      0.75,
+      size.width - 0.75,
+      size.height - 0.75,
+      Radius.circular(radius),
+    );
+
+    final Path path = Path()..addRRect(rrect);
+    final Path metricsPath = Path();
+
+    for (final ui.PathMetric metric in path.computeMetrics()) {
+      double distance = 0.0;
+      while (distance < metric.length) {
+        final double length = math.min(6, metric.length - distance);
+        metricsPath.addPath(
+          metric.extractPath(distance, distance + length),
+          Offset.zero,
+        );
+        distance += 10;
+      }
+    }
+    canvas.drawPath(metricsPath, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedBorderPainter oldDelegate) {
+    return oldDelegate.color != color ||
+        oldDelegate.radius != radius;
+  }
 }

@@ -16,11 +16,16 @@ import '../../models/app_models.dart';
 
 class VerificationDialog extends ConsumerStatefulWidget {
   const VerificationDialog.application(this.application, {super.key})
-      : renewal = null;
-  const VerificationDialog.renewal(this.renewal, {super.key})
-      : application = null;
+      : renewal = null,
+        isHistory = false;
+  const VerificationDialog.renewal(
+    this.renewal, {
+    super.key,
+    this.isHistory = false,
+  }) : application = null;
   final VendorApplication? application;
   final RenewalRequest? renewal;
+  final bool isHistory;
   String get applicant => application?.applicant ?? renewal!.applicant;
   String get stall => application?.stallName ?? renewal!.stallName;
   String get category => application?.category ?? renewal!.category;
@@ -234,6 +239,10 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
         (currentApp?.status == ApplicationStatus.invalidDocs) ||
         (currentRenewal?.status == RenewalStatus.expired);
 
+    final isHistoricalView = widget.isHistory ||
+        (widget.renewal != null &&
+            currentRenewal?.status != RenewalStatus.reviewing);
+
     return Dialog(
       insetPadding: EdgeInsets.symmetric(
         horizontal: narrow ? 10 : 55,
@@ -255,13 +264,17 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                       children: [
                         Text(
                           widget.renewal != null
-                              ? 'RENEWALS  /  RENEWAL REQUEST DETAIL'
+                              ? (isHistoricalView
+                                  ? 'RENEWALS  /  HISTORICAL RENEWAL RECORD'
+                                  : 'RENEWALS  /  RENEWAL REQUEST DETAIL')
                               : 'TENANTS  /  VERIFICATION DETAIL',
                           style: TextStyle(
                             fontSize: 9,
+                            fontWeight: isHistoricalView ? FontWeight.w700 : FontWeight.w400,
+                            letterSpacing: 0.5,
                             color: Theme.of(
                               context,
-                            ).colorScheme.onSurface.withValues(alpha: .5),
+                            ).colorScheme.onSurface.withValues(alpha: isHistoricalView ? .75 : .5),
                           ),
                         ),
                         const SizedBox(height: 10),
@@ -273,13 +286,49 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    widget.applicant,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.w800,
-                                    ),
+                                  Row(
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          widget.applicant,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                      if (isHistoricalView) ...[
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 7,
+                                            vertical: 2.5,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .primary
+                                                .withValues(alpha: 0.12),
+                                            borderRadius: BorderRadius.circular(4),
+                                            border: Border.all(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .primary
+                                                  .withValues(alpha: 0.25),
+                                            ),
+                                          ),
+                                          child: Text(
+                                            'Archived Record',
+                                            style: TextStyle(
+                                              fontSize: 9.5,
+                                              fontWeight: FontWeight.w700,
+                                              color: Theme.of(context).colorScheme.primary,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
                                   ),
                                   Text(
                                     'Submitted: ${shortDate.format(currentRenewal?.submittedAt ?? currentApp?.submittedAt ?? widget.renewal?.submittedAt ?? widget.application?.submittedAt ?? DateTime.now())}  •  ${widget.location}',
@@ -416,14 +465,14 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
         ],
       );
       return LayoutBuilder(
-        builder: (context, constraints) => constraints.maxWidth < 900
+        builder: (context, constraints) => constraints.maxWidth < 1100
             ? Wrap(
                 spacing: 12,
                 runSpacing: 8,
                 children: [statusMessage, actions],
               )
             : Row(
-                children: [statusMessage, const Spacer(), actions],
+                children: [Expanded(child: statusMessage), const SizedBox(width: 16), actions],
               ),
       );
     }
@@ -903,21 +952,56 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                   ),
                 ],
               ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF10B981).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  'Good Standing',
-                  style: GoogleFonts.inter(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF10B981),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      'Good Standing',
+                      style: GoogleFonts.inter(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF10B981),
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 6),
+                  InkWell(
+                    onTap: () => _showAllRenewalHistoryModal(
+                      context,
+                      renewal: renewal,
+                      matchingRenewals: matchingRenewals,
+                    ),
+                    borderRadius: BorderRadius.circular(4),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'View All',
+                            style: GoogleFonts.inter(
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w700,
+                              color: colors.accent,
+                            ),
+                          ),
+                          Icon(
+                            Icons.chevron_right_rounded,
+                            size: 13,
+                            color: colors.accent,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -935,6 +1019,22 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                     ? BadgeKind.danger
                     : BadgeKind.warning,
             isCurrent: true,
+            onTap: () => _showCycleDetailDialog(
+              context,
+              cycle: '${renewal.expiryDate.year} Renewal (Current)',
+              dateStr: renewal.submittedAt != null
+                  ? 'Submitted ${shortDate.format(renewal.submittedAt!)}'
+                  : 'Submitted recently',
+              statusLabel: enumLabel(renewal.status),
+              statusKind: renewal.status == RenewalStatus.approved
+                  ? BadgeKind.success
+                  : renewal.status == RenewalStatus.expired
+                      ? BadgeKind.danger
+                      : BadgeKind.warning,
+              docs: renewal.documents.isNotEmpty
+                  ? renewal.documents
+                  : seedKycDocuments(renewal.submittedAt ?? DateTime.now()),
+            ),
           ),
           if (matchingRenewals.isNotEmpty)
             for (int i = 0; i < matchingRenewals.length; i++)
@@ -952,6 +1052,22 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                         : BadgeKind.neutral,
                 isCurrent: false,
                 isLast: i == matchingRenewals.length - 1,
+                onTap: () => _showCycleDetailDialog(
+                  context,
+                  cycle: '${matchingRenewals[i].expiryDate.year} Annual License',
+                  dateStr: matchingRenewals[i].submittedAt != null
+                      ? 'Submitted ${shortDate.format(matchingRenewals[i].submittedAt!)}'
+                      : 'Valid until ${shortDate.format(matchingRenewals[i].expiryDate)}',
+                  statusLabel: enumLabel(matchingRenewals[i].status),
+                  statusKind: matchingRenewals[i].status == RenewalStatus.approved
+                      ? BadgeKind.success
+                      : matchingRenewals[i].status == RenewalStatus.expired
+                          ? BadgeKind.danger
+                          : BadgeKind.neutral,
+                  docs: matchingRenewals[i].documents.isNotEmpty
+                      ? matchingRenewals[i].documents
+                      : seedKycDocuments(matchingRenewals[i].submittedAt ?? matchingRenewals[i].expiryDate),
+                ),
               )
           else ...[
             _historyItem(
@@ -961,6 +1077,14 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
               statusLabel: 'Approved',
               statusKind: BadgeKind.success,
               isCurrent: false,
+              onTap: () => _showCycleDetailDialog(
+                context,
+                cycle: '${renewal.expiryDate.year - 1} Annual License',
+                dateStr: 'Approved on Oct 14, ${renewal.expiryDate.year - 1}',
+                statusLabel: 'Approved',
+                statusKind: BadgeKind.success,
+                docs: seedKycDocuments(DateTime(renewal.expiryDate.year - 1, 10, 14)),
+              ),
             ),
             _historyItem(
               context,
@@ -969,6 +1093,14 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
               statusLabel: 'Approved',
               statusKind: BadgeKind.success,
               isCurrent: false,
+              onTap: () => _showCycleDetailDialog(
+                context,
+                cycle: '${renewal.expiryDate.year - 2} Annual License',
+                dateStr: 'Approved on Oct 08, ${renewal.expiryDate.year - 2}',
+                statusLabel: 'Approved',
+                statusKind: BadgeKind.success,
+                docs: seedKycDocuments(DateTime(renewal.expiryDate.year - 2, 10, 8)),
+              ),
             ),
             _historyItem(
               context,
@@ -978,6 +1110,14 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
               statusKind: BadgeKind.neutral,
               isCurrent: false,
               isLast: true,
+              onTap: () => _showCycleDetailDialog(
+                context,
+                cycle: 'Initial Stall Grant',
+                dateStr: 'Verified on Oct 12, 2023',
+                statusLabel: 'Verified',
+                statusKind: BadgeKind.neutral,
+                docs: seedKycDocuments(DateTime(2023, 10, 12)),
+              ),
             ),
           ],
         ],
@@ -993,6 +1133,7 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
     required BadgeKind statusKind,
     required bool isCurrent,
     bool isLast = false,
+    VoidCallback? onTap,
   }) {
     final colors = semanticColors(context);
     final dotColor = isCurrent
@@ -1001,7 +1142,7 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
             ? const Color(0xFF10B981)
             : colors.mutedText;
 
-    return Row(
+    final content = Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Column(
@@ -1033,31 +1174,500 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      cycle,
-                      style: GoogleFonts.inter(
-                        fontSize: 10,
-                        fontWeight:
-                            isCurrent ? FontWeight.w800 : FontWeight.w600,
-                        color: colors.primaryText,
+                    Expanded(
+                      child: Text(
+                        cycle,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          fontWeight:
+                              isCurrent ? FontWeight.w800 : FontWeight.w600,
+                          color: colors.primaryText,
+                        ),
                       ),
                     ),
+                    const SizedBox(width: 4),
                     StatusBadge(label: statusLabel, kind: statusKind),
                   ],
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  dateStr,
-                  style: GoogleFonts.inter(
-                    fontSize: 8.5,
-                    color: colors.mutedText,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        dateStr,
+                        style: GoogleFonts.inter(
+                          fontSize: 8.5,
+                          color: colors.mutedText,
+                        ),
+                      ),
+                    ),
+                    if (onTap != null)
+                      Text(
+                        'View Docs >',
+                        style: GoogleFonts.inter(
+                          fontSize: 8.5,
+                          fontWeight: FontWeight.w600,
+                          color: colors.accent,
+                        ),
+                      ),
+                  ],
                 ),
               ],
             ),
           ),
         ),
       ],
+    );
+
+    if (onTap != null) {
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
+          child: content,
+        ),
+      );
+    }
+    return content;
+  }
+
+  void _showCycleDetailDialog(
+    BuildContext context, {
+    required String cycle,
+    required String dateStr,
+    required String statusLabel,
+    required BadgeKind statusKind,
+    required List<KycDocument> docs,
+  }) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        final colors = semanticColors(ctx);
+        final narrow = MediaQuery.sizeOf(ctx).width < 600;
+
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 680),
+            child: Padding(
+              padding: EdgeInsets.all(narrow ? 16 : 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  cycle,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w800,
+                                    color: colors.primaryText,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                StatusBadge(label: statusLabel, kind: statusKind),
+                              ],
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              '${widget.applicant} • ${widget.stall} • $dateStr',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: colors.mutedText,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        icon: const Icon(Icons.close_rounded),
+                        tooltip: 'Close',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  const Divider(),
+                  const SizedBox(height: 14),
+                  Text(
+                    'Archived Cycle Documents (${docs.length} Uploads)',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: colors.primaryText,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 340),
+                    child: SingleChildScrollView(
+                      child: GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: narrow ? 1 : 2,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 10,
+                          childAspectRatio: 2.4,
+                        ),
+                        itemCount: docs.length,
+                        itemBuilder: (context, idx) {
+                          final doc = docs[idx];
+                          final isPdf = doc.filename.toLowerCase().endsWith('.pdf');
+                          final isWord = doc.filename.toLowerCase().endsWith('.docx') ||
+                              doc.filename.toLowerCase().endsWith('.doc');
+
+                          return InkWell(
+                            onTap: () {
+                              showDialog<void>(
+                                context: context,
+                                builder: (_) => DocumentViewerModal(
+                                  documents: docs,
+                                  initialIndex: idx,
+                                  applicantName: widget.applicant,
+                                  stallName: widget.stall,
+                                ),
+                              );
+                            },
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: colors.inputSurface,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: colors.subtleBorder),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 36,
+                                    height: 36,
+                                    decoration: BoxDecoration(
+                                      color: isPdf
+                                          ? const Color(0xFFEF4444).withValues(alpha: 0.12)
+                                          : isWord
+                                              ? const Color(0xFF3B82F6).withValues(alpha: 0.12)
+                                              : const Color(0xFF10B981).withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Icon(
+                                      isPdf
+                                          ? Icons.picture_as_pdf_rounded
+                                          : isWord
+                                              ? Icons.description_rounded
+                                              : Icons.image_rounded,
+                                      size: 18,
+                                      color: isPdf
+                                          ? const Color(0xFFEF4444)
+                                          : isWord
+                                              ? const Color(0xFF3B82F6)
+                                              : const Color(0xFF10B981),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          doc.name,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: GoogleFonts.inter(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: colors.primaryText,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          doc.filename,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 9.5,
+                                            color: colors.mutedText,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Icon(
+                                    Icons.visibility_outlined,
+                                    size: 16,
+                                    color: colors.mutedText,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      ),
+                      child: const Text('Close'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showAllRenewalHistoryModal(
+    BuildContext context, {
+    required RenewalRequest renewal,
+    required List<RenewalRequest> matchingRenewals,
+  }) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        final colors = semanticColors(ctx);
+        final narrow = MediaQuery.sizeOf(ctx).width < 640;
+
+        final records = <Map<String, dynamic>>[
+          {
+            'cycle': '${renewal.expiryDate.year} Renewal (Current)',
+            'dateStr': renewal.submittedAt != null
+                ? 'Submitted ${shortDate.format(renewal.submittedAt!)}'
+                : 'Submitted recently',
+            'statusLabel': enumLabel(renewal.status),
+            'statusKind': renewal.status == RenewalStatus.approved
+                ? BadgeKind.success
+                : renewal.status == RenewalStatus.expired
+                    ? BadgeKind.danger
+                    : BadgeKind.warning,
+            'isCurrent': true,
+            'docs': renewal.documents.isNotEmpty
+                ? renewal.documents
+                : seedKycDocuments(renewal.submittedAt ?? DateTime.now()),
+          },
+          if (matchingRenewals.isNotEmpty)
+            for (final r in matchingRenewals)
+              {
+                'cycle': '${r.expiryDate.year} Annual License',
+                'dateStr': r.submittedAt != null
+                    ? 'Submitted ${shortDate.format(r.submittedAt!)}'
+                    : 'Valid until ${shortDate.format(r.expiryDate)}',
+                'statusLabel': enumLabel(r.status),
+                'statusKind': r.status == RenewalStatus.approved
+                    ? BadgeKind.success
+                    : r.status == RenewalStatus.expired
+                        ? BadgeKind.danger
+                        : BadgeKind.neutral,
+                'isCurrent': false,
+                'docs': r.documents.isNotEmpty
+                    ? r.documents
+                    : seedKycDocuments(r.submittedAt ?? r.expiryDate),
+              }
+          else ...[
+            {
+              'cycle': '${renewal.expiryDate.year - 1} Annual License',
+              'dateStr': 'Approved on Oct 14, ${renewal.expiryDate.year - 1}',
+              'statusLabel': 'Approved',
+              'statusKind': BadgeKind.success,
+              'isCurrent': false,
+              'docs': seedKycDocuments(DateTime(renewal.expiryDate.year - 1, 10, 14)),
+            },
+            {
+              'cycle': '${renewal.expiryDate.year - 2} Annual License',
+              'dateStr': 'Approved on Oct 08, ${renewal.expiryDate.year - 2}',
+              'statusLabel': 'Approved',
+              'statusKind': BadgeKind.success,
+              'isCurrent': false,
+              'docs': seedKycDocuments(DateTime(renewal.expiryDate.year - 2, 10, 8)),
+            },
+            {
+              'cycle': 'Initial Stall Grant',
+              'dateStr': 'Verified on Oct 12, 2023',
+              'statusLabel': 'Verified',
+              'statusKind': BadgeKind.neutral,
+              'isCurrent': false,
+              'docs': seedKycDocuments(DateTime(2023, 10, 12)),
+            },
+          ],
+        ];
+
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720, maxHeight: 600),
+            child: Padding(
+              padding: EdgeInsets.all(narrow ? 16 : 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.history_rounded, size: 20, color: colors.accent),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Complete Renewal History',
+                            style: GoogleFonts.inter(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: colors.primaryText,
+                            ),
+                          ),
+                        ],
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        icon: const Icon(Icons.close_rounded),
+                        tooltip: 'Close',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'All historical cycles, licenses, and inspection records for ${widget.applicant} (${widget.stall}).',
+                    style: TextStyle(fontSize: 12, color: colors.mutedText),
+                  ),
+                  const SizedBox(height: 14),
+                  const Divider(),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: ListView.separated(
+                      itemCount: records.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (context, idx) {
+                        final rec = records[idx];
+                        final List<KycDocument> docs = rec['docs'] as List<KycDocument>;
+
+                        return Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: colors.inputSurface,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: rec['isCurrent'] == true
+                                  ? const Color(0xFF3B82F6).withValues(alpha: 0.5)
+                                  : colors.subtleBorder,
+                              width: rec['isCurrent'] == true ? 1.5 : 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 34,
+                                height: 34,
+                                decoration: BoxDecoration(
+                                  color: rec['isCurrent'] == true
+                                      ? const Color(0xFF3B82F6).withValues(alpha: 0.12)
+                                      : colors.cardBackground,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  rec['isCurrent'] == true
+                                      ? Icons.update_rounded
+                                      : Icons.verified_outlined,
+                                  size: 18,
+                                  color: rec['isCurrent'] == true
+                                      ? const Color(0xFF3B82F6)
+                                      : colors.secondaryText,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text(
+                                          rec['cycle'] as String,
+                                          style: GoogleFonts.inter(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700,
+                                            color: colors.primaryText,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        StatusBadge(
+                                          label: rec['statusLabel'] as String,
+                                          kind: rec['statusKind'] as BadgeKind,
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      '${rec['dateStr']} • ${docs.length} uploaded document(s)',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: colors.mutedText,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              OutlinedButton.icon(
+                                onPressed: () {
+                                  _showCycleDetailDialog(
+                                    context,
+                                    cycle: rec['cycle'] as String,
+                                    dateStr: rec['dateStr'] as String,
+                                    statusLabel: rec['statusLabel'] as String,
+                                    statusKind: rec['statusKind'] as BadgeKind,
+                                    docs: docs,
+                                  );
+                                },
+                                icon: const Icon(Icons.folder_open_rounded, size: 14),
+                                label: const Text('View Documents', style: TextStyle(fontSize: 11)),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                      ),
+                      child: const Text('Close'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 

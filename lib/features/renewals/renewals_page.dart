@@ -78,7 +78,10 @@ class _RenewalsPageState extends ConsumerState<RenewalsPage> {
     _markRenewalViewed(selected.id);
     showBlurredDialog(
       context,
-      (context) => VerificationDialog.renewal(selected!),
+      (context) => VerificationDialog.renewal(
+        selected!,
+        isHistory: selected.status != RenewalStatus.reviewing,
+      ),
     );
   }
 
@@ -402,7 +405,10 @@ class _RenewalsPageState extends ConsumerState<RenewalsPage> {
                     _markRenewalViewed(v.id);
                     showBlurredDialog(
                       context,
-                      (context) => VerificationDialog.renewal(v),
+                      (context) => VerificationDialog.renewal(
+                        v,
+                        isHistory: history || v.status != RenewalStatus.reviewing,
+                      ),
                     );
                   },
                 ),
