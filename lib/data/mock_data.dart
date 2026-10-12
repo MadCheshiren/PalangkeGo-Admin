@@ -3,32 +3,306 @@ import 'package:flutter/material.dart';
 import '../models/admin_models.dart';
 import '../models/app_models.dart';
 
-final _names = [
-  'Aicel Castillo',
-  'Diosa Del Rosario',
-  'William Del Rosario',
-  'Sophie Sb',
-  'Elena Ramos',
-  'Ricardo Santos',
-  'Maria Clara Santos',
-  'Antonio Reyes',
-  'Bianca Salazar',
-  'Rico Fernandez',
-  'Mila Mendoza',
-  'Carlo Mendoza',
-  'Diana Villanueva',
-  'Emilio Navarro',
-  'Fatima Cruz',
-  'Gabriel Lim',
-  'Helena Bautista',
-  'Isaac Fernandez',
-  'Julia Ramos',
-  'Kevin Tan',
-  'Lucia Flores',
-  'Cora Morales',
-  'Mateo Garcia',
-  'Nina Castillo',
-  'Omar Rivera',
+class StallHolderProfile {
+  const StallHolderProfile({
+    required this.idNumber,
+    required this.name,
+    required this.stallName,
+    required this.category,
+    required this.stallType,
+    required this.location,
+    required this.email,
+    required this.phone,
+    required this.residence,
+  });
+
+  final int idNumber;
+  final String name;
+  final String stallName;
+  final String category;
+  final String stallType;
+  final String location;
+  final String email;
+  final String phone;
+  final String residence;
+}
+
+const stallHolderProfiles = [
+  StallHolderProfile(
+    idNumber: 92834,
+    name: 'Aicel Castillo',
+    stallName: 'Riverside Seafood',
+    category: 'FRESH FISH',
+    stallType: 'Fresh Fish',
+    location: 'Block 14 - Stall 2',
+    email: 'aicel.castillo@gmail.com',
+    phone: '+63 921 555 1000',
+    residence: 'Brgy. Peñafrancia, Naga City',
+  ),
+  StallHolderProfile(
+    idNumber: 92835,
+    name: 'Diosa Del Rosario',
+    stallName: 'Bicol Dry Goods',
+    category: 'DRIED FISH',
+    stallType: 'Dried Fish',
+    location: 'Block 15 - Stall 3',
+    email: 'diosa.del.rosario@gmail.com',
+    phone: '+63 921 555 1001',
+    residence: 'Brgy. Dayangdang, Naga City',
+  ),
+  StallHolderProfile(
+    idNumber: 92836,
+    name: 'William Del Rosario',
+    stallName: 'Clara Vegetable Cart',
+    category: 'VEGETABLES',
+    stallType: 'Vegetables',
+    location: 'Block 16 - Stall 4',
+    email: 'william.del.rosario@gmail.com',
+    phone: '+63 921 555 1002',
+    residence: 'Brgy. Triangulo, Naga City',
+  ),
+  StallHolderProfile(
+    idNumber: 92837,
+    name: 'Sophie Sb',
+    stallName: 'Southside Poultry',
+    category: 'CHICKEN',
+    stallType: 'Chicken',
+    location: 'Block 17 - Stall 5',
+    email: 'sophie.sb@gmail.com',
+    phone: '+63 921 555 1003',
+    residence: 'Brgy. Concepcion Grande, Naga City',
+  ),
+  StallHolderProfile(
+    idNumber: 92838,
+    name: 'Elena Ramos',
+    stallName: 'North Market Fruits',
+    category: 'FRUITS',
+    stallType: 'Fruits',
+    location: 'Block 14 - Stall 6',
+    email: 'elena.ramos@gmail.com',
+    phone: '+63 921 555 1004',
+    residence: 'Brgy. Tinago, Naga City',
+  ),
+  StallHolderProfile(
+    idNumber: 92839,
+    name: 'Ricardo Santos',
+    stallName: 'Santos Quality Meats',
+    category: 'MEAT',
+    stallType: 'Meat',
+    location: 'Block 15 - Stall 7',
+    email: 'ricardo.santos@gmail.com',
+    phone: '+63 921 555 1005',
+    residence: 'Brgy. Mabolo, Naga City',
+  ),
+  StallHolderProfile(
+    idNumber: 92840,
+    name: 'Maria Clara Santos',
+    stallName: 'Sunrise Bakery Stall',
+    category: 'MARITATAS',
+    stallType: 'Maritatas',
+    location: 'Block 16 - Stall 8',
+    email: 'maria.clara.santos@gmail.com',
+    phone: '+63 921 555 1006',
+    residence: 'Brgy. Sabang, Naga City',
+  ),
+  StallHolderProfile(
+    idNumber: 92841,
+    name: 'Antonio Reyes',
+    stallName: 'Central Spice House',
+    category: 'SARI-SARI',
+    stallType: 'SARI-SARI',
+    location: 'Block 17 - Stall 9',
+    email: 'antonio.reyes@gmail.com',
+    phone: '+63 921 555 1007',
+    residence: 'Brgy. San Felipe, Naga City',
+  ),
+  StallHolderProfile(
+    idNumber: 92842,
+    name: 'Bianca Salazar',
+    stallName: 'Coastal Catch Depot',
+    category: 'FRESH FISH',
+    stallType: 'Fresh Fish',
+    location: 'Block 14 - Stall 2',
+    email: 'bianca.salazar@gmail.com',
+    phone: '+63 921 555 1008',
+    residence: 'Brgy. Cararayan, Naga City',
+  ),
+  StallHolderProfile(
+    idNumber: 92843,
+    name: 'Rico Fernandez',
+    stallName: 'Baybayin Crafts & Native Snacks',
+    category: 'MARITATAS',
+    stallType: 'Maritatas',
+    location: 'Block 15 - Stall 3',
+    email: 'rico.fernandez@gmail.com',
+    phone: '+63 921 555 1009',
+    residence: 'Brgy. Pacol, Naga City',
+  ),
+  StallHolderProfile(
+    idNumber: 92844,
+    name: 'Mila Mendoza',
+    stallName: 'Harvest Meat Corner',
+    category: 'MEAT',
+    stallType: 'Meat',
+    location: 'Block 16 - Stall 4',
+    email: 'mila.mendoza@gmail.com',
+    phone: '+63 921 555 1010',
+    residence: 'Brgy. Peñafrancia, Naga City',
+  ),
+  StallHolderProfile(
+    idNumber: 92845,
+    name: 'Carlo Mendoza',
+    stallName: 'Westside Poultry Farm',
+    category: 'CHICKEN',
+    stallType: 'Chicken',
+    location: 'Block 17 - Stall 5',
+    email: 'carlo.mendoza@gmail.com',
+    phone: '+63 921 555 1011',
+    residence: 'Brgy. Dayangdang, Naga City',
+  ),
+  StallHolderProfile(
+    idNumber: 92846,
+    name: 'Diana Villanueva',
+    stallName: 'Island Roots Pantry',
+    category: 'SARI-SARI',
+    stallType: 'SARI-SARI',
+    location: 'Block 14 - Stall 6',
+    email: 'diana.villanueva@gmail.com',
+    phone: '+63 921 555 1012',
+    residence: 'Brgy. Triangulo, Naga City',
+  ),
+  StallHolderProfile(
+    idNumber: 92847,
+    name: 'Emilio Navarro',
+    stallName: 'Valley Harvest Vegetables',
+    category: 'VEGETABLES',
+    stallType: 'Vegetables',
+    location: 'Block 15 - Stall 7',
+    email: 'emilio.navarro@gmail.com',
+    phone: '+63 921 555 1013',
+    residence: 'Brgy. Concepcion Grande, Naga City',
+  ),
+  StallHolderProfile(
+    idNumber: 92848,
+    name: 'Fatima Cruz',
+    stallName: 'Golden Fields Grains',
+    category: 'SARI-SARI',
+    stallType: 'SARI-SARI',
+    location: 'Block 16 - Stall 8',
+    email: 'fatima.cruz@gmail.com',
+    phone: '+63 921 555 1014',
+    residence: 'Brgy. Tinago, Naga City',
+  ),
+  StallHolderProfile(
+    idNumber: 92849,
+    name: 'Gabriel Lim',
+    stallName: 'Freshway Dairy Booth',
+    category: 'MARITATAS',
+    stallType: 'Maritatas',
+    location: 'Block 17 - Stall 9',
+    email: 'gabriel.lim@gmail.com',
+    phone: '+63 921 555 1015',
+    residence: 'Brgy. Mabolo, Naga City',
+  ),
+  StallHolderProfile(
+    idNumber: 92850,
+    name: 'Helena Bautista',
+    stallName: 'Cedar Home Supplies',
+    category: 'SARI-SARI',
+    stallType: 'SARI-SARI',
+    location: 'Block 14 - Stall 2',
+    email: 'helena.bautista@gmail.com',
+    phone: '+63 921 555 1016',
+    residence: 'Brgy. Sabang, Naga City',
+  ),
+  StallHolderProfile(
+    idNumber: 92851,
+    name: 'Isaac Fernandez',
+    stallName: 'Luzon Fresh Produce',
+    category: 'VEGETABLES',
+    stallType: 'Vegetables',
+    location: 'Block 15 - Stall 3',
+    email: 'isaac.fernandez@gmail.com',
+    phone: '+63 921 555 1017',
+    residence: 'Brgy. San Felipe, Naga City',
+  ),
+  StallHolderProfile(
+    idNumber: 92852,
+    name: 'Julia Ramos',
+    stallName: 'Orchard Fruit Basket',
+    category: 'FRUITS',
+    stallType: 'Fruits',
+    location: 'Block 16 - Stall 4',
+    email: 'julia.ramos@gmail.com',
+    phone: '+63 921 555 1018',
+    residence: 'Brgy. Cararayan, Naga City',
+  ),
+  StallHolderProfile(
+    idNumber: 92853,
+    name: 'Kevin Tan',
+    stallName: 'Morning Star Snacks',
+    category: 'MARITATAS',
+    stallType: 'Maritatas',
+    location: 'Block 17 - Stall 5',
+    email: 'kevin.tan@gmail.com',
+    phone: '+63 921 555 1019',
+    residence: 'Brgy. Pacol, Naga City',
+  ),
+  StallHolderProfile(
+    idNumber: 92854,
+    name: 'Lucia Flores',
+    stallName: 'Pine Street Provisions',
+    category: 'SARI-SARI',
+    stallType: 'SARI-SARI',
+    location: 'Block 14 - Stall 6',
+    email: 'lucia.flores@gmail.com',
+    phone: '+63 921 555 1020',
+    residence: 'Brgy. Peñafrancia, Naga City',
+  ),
+  StallHolderProfile(
+    idNumber: 92855,
+    name: 'Cora Morales',
+    stallName: 'Township Tea House',
+    category: 'MARITATAS',
+    stallType: 'Maritatas',
+    location: 'Block 15 - Stall 7',
+    email: 'cora.morales@gmail.com',
+    phone: '+63 921 555 1021',
+    residence: 'Brgy. Dayangdang, Naga City',
+  ),
+  StallHolderProfile(
+    idNumber: 92856,
+    name: 'Mateo Garcia',
+    stallName: 'Green Valley Fresh Greens',
+    category: 'VEGETABLES',
+    stallType: 'Vegetables',
+    location: 'Block 16 - Stall 8',
+    email: 'mateo.garcia@gmail.com',
+    phone: '+63 921 555 1022',
+    residence: 'Brgy. Triangulo, Naga City',
+  ),
+  StallHolderProfile(
+    idNumber: 92857,
+    name: 'Nina Castillo',
+    stallName: 'Westside Kitchen Poultry',
+    category: 'CHICKEN',
+    stallType: 'Chicken',
+    location: 'Block 17 - Stall 9',
+    email: 'nina.castillo@gmail.com',
+    phone: '+63 921 555 1023',
+    residence: 'Brgy. Concepcion Grande, Naga City',
+  ),
+  StallHolderProfile(
+    idNumber: 92858,
+    name: 'Omar Rivera',
+    stallName: 'Zest and Spice Stall',
+    category: 'SARI-SARI',
+    stallType: 'SARI-SARI',
+    location: 'Block 14 - Stall 2',
+    email: 'omar.rivera@gmail.com',
+    phone: '+63 921 555 1024',
+    residence: 'Brgy. Tinago, Naga City',
+  ),
 ];
 
 final _customers = [
@@ -59,58 +333,8 @@ final _customers = [
   'Linda Williams',
 ];
 
-const _applicationStalls = [
-  'Luzon Fresh Produce',
-  'Santos Quality Meats',
-  'Clara Vegetable Cart',
-  'Bicol Dry Goods',
-  'Riverside Seafood',
-  'North Market Fruits',
-  'Sunrise Bakery Stall',
-  'Green Valley Grocer',
-  'Central Spice House',
-  'Baybayin Crafts',
-  'Harvest Corner',
-  'Southside Poultry',
-  'Island Roots Pantry',
-  'Market Lane Delicacies',
-  'Golden Fields Grains',
-  'Freshway Dairy Booth',
-  'Cedar Home Supplies',
-  'Coastal Catch Depot',
-  'Orchard Basket',
-  'Morning Star Snacks',
-  'Pine Street Provisions',
-  'Township Tea House',
-  'Valley Harvest Goods',
-  'Westside Kitchen',
-  'Zest and Spice Stall',
-];
-
 List<Vendor> seedVendors({List<Order>? ordersSource}) {
   final base = DateTime(2023, 10, 12, 10, 45);
-  final nagaBarangays = [
-    'Brgy. Peñafrancia, Naga City',
-    'Brgy. Dayangdang, Naga City',
-    'Brgy. Triangulo, Naga City',
-    'Brgy. Concepcion Grande, Naga City',
-    'Brgy. Tinago, Naga City',
-    'Brgy. Mabolo, Naga City',
-    'Brgy. Sabang, Naga City',
-    'Brgy. San Felipe, Naga City',
-    'Brgy. Cararayan, Naga City',
-    'Brgy. Pacol, Naga City',
-  ];
-  final types = [
-    'Fresh Fish',
-    'Dried Fish',
-    'Meat',
-    'Chicken',
-    'Fruits',
-    'Vegetables',
-    'Maritatas',
-    'SARI-SARI',
-  ];
 
   final ordersList = ordersSource ?? seedOrders();
   final vendorStats = <String, (int count, double revenue)>{};
@@ -124,6 +348,7 @@ List<Vendor> seedVendors({List<Order>? ordersSource}) {
 
   return List.generate(verifiedIndices.length, (i) {
     final index = verifiedIndices[i];
+    final profile = stallHolderProfiles[index];
     final AccountStatus status = switch (index) {
       4 => AccountStatus.offline,
       6 => AccountStatus.suspended,
@@ -132,23 +357,22 @@ List<Vendor> seedVendors({List<Order>? ordersSource}) {
       _ => AccountStatus.active,
     };
     final isBlocked = status == AccountStatus.blocked;
-    final vendorName = _names[index % _names.length];
-    final stats = vendorStats[vendorName];
+    final stats = vendorStats[profile.name];
     final orderCount = stats?.$1 ?? (1429 - index * 31);
     final totalTransactions = stats?.$2 ?? (42800 - index * 875).toDouble();
 
     return Vendor(
-      id: 'VND-${8492 + index}',
-      name: vendorName,
-      email: 'vendor_${8492 + index}@mepco.com',
-      stallType: types[index % types.length],
+      id: 'VND-${profile.idNumber}',
+      name: profile.name,
+      email: profile.email,
+      stallType: profile.stallType,
       registeredAt: base.add(Duration(days: index * 8, hours: index % 7)),
       status: status,
-      location: 'Block ${14 + index % 4} - Stall ${2 + index % 8}',
+      location: profile.location,
       orders: orderCount,
       transactions: totalTransactions,
-      phone: '+63 921 555 ${1000 + index}',
-      residence: nagaBarangays[index % nagaBarangays.length],
+      phone: profile.phone,
+      residence: profile.residence,
       administrativeNotes: isBlocked
           ? 'Account permanently restricted due to policy violations.'
           : status == AccountStatus.suspended
@@ -187,32 +411,23 @@ List<Customer> seedCustomers() {
 }
 
 List<VendorApplication> seedApplications() {
-  final categories = [
-    'FRESH FISH',
-    'DRIED FISH',
-    'MEAT',
-    'CHICKEN',
-    'FRUITS',
-    'VEGETABLES',
-    'MARITATAS',
-    'SARI-SARI',
-  ];
   return List.generate(
     25,
     (index) {
+      final profile = stallHolderProfiles[index];
       final status = switch (index) {
         5 || 9 || 12 || 17 || 20 => ApplicationStatus.reviewing,
         2 || 14 || 23 => ApplicationStatus.invalidDocs,
         _ => ApplicationStatus.verified,
       };
       return VendorApplication(
-        id: '#APP-${92834 + index}',
-        applicant: _names[index % _names.length],
-        stallName: _applicationStalls[index % _applicationStalls.length],
-        category: categories[index % categories.length],
+        id: '#APP-${profile.idNumber}',
+        applicant: profile.name,
+        stallName: profile.stallName,
+        category: profile.category,
         submittedAt: DateTime(2023, 10, 24).subtract(Duration(days: index)),
         status: status,
-        location: 'Block ${14 + index % 4} - Stall ${2 + index % 8}',
+        location: profile.location,
         documents: seedKycDocuments(
             DateTime(2023, 10, 24).subtract(Duration(days: index))),
       );
@@ -270,16 +485,6 @@ List<KycDocument> seedKycDocuments(DateTime uploadedAt) => [
     ];
 
 List<RenewalRequest> seedRenewals() {
-  final categories = [
-    'FRESH FISH',
-    'DRIED FISH',
-    'MEAT',
-    'CHICKEN',
-    'FRUITS',
-    'VEGETABLES',
-    'MARITATAS',
-    'SARI-SARI',
-  ];
   final now = DateTime.now();
   final targetYear = (now.month > 1 || (now.month == 1 && now.day > 7)) ? 2027 : 2026;
   final annualJanuaryDeadline = DateTime(targetYear, 1, 7);
@@ -288,6 +493,7 @@ List<RenewalRequest> seedRenewals() {
   return List.generate(
     25,
     (index) {
+      final profile = stallHolderProfiles[index];
       final status = switch (index) {
         1 || 5 || 9 || 13 || 17 || 21 => RenewalStatus.reviewing,
         2 || 6 || 10 || 14 || 18 => RenewalStatus.expired,
@@ -303,13 +509,13 @@ List<RenewalRequest> seedRenewals() {
           : DateTime(now.year, now.month, now.day).subtract(Duration(days: index % 5));
 
       return RenewalRequest(
-        id: '#RN-${92834 + index}',
-        applicant: _names[index % _names.length],
-        stallName: _applicationStalls[index % _applicationStalls.length],
-        category: categories[index % categories.length],
+        id: '#RN-${profile.idNumber}',
+        applicant: profile.name,
+        stallName: profile.stallName,
+        category: profile.category,
         expiryDate: expiryDate,
         status: status,
-        location: 'Block ${14 + index % 4} - Stall ${2 + index % 8}',
+        location: profile.location,
         submittedAt: submittedAt,
         documents: seedKycDocuments(submittedAt),
       );
@@ -332,26 +538,17 @@ List<Report> seedReports() {
     'Customer Conflict',
     'Other Support',
   ];
-  final categories = [
-    'FRESH FISH',
-    'DRIED FISH',
-    'MEAT',
-    'CHICKEN',
-    'FRUITS',
-    'VEGETABLES',
-    'MARITATAS',
-    'SARI-SARI',
-  ];
   final priorities = [Priority.high, Priority.medium, Priority.low];
   return List.generate(25, (index) {
     final isStallHolder = index % 2 == 0;
     final type = isStallHolder ? 'Stall Holder' : 'Customer';
+    final profile = stallHolderProfiles[(index ~/ 2) % stallHolderProfiles.length];
     final accountIssue = isStallHolder
-        ? _names[(index ~/ 2) % _names.length]
+        ? profile.name
         : _customers[(index ~/ 2) % _customers.length];
     final submittedBy = isStallHolder
         ? _customers[(index + 9) % _customers.length]
-        : _names[(index ~/ 2) % _names.length];
+        : profile.name;
     final reason = (isStallHolder ? customerTopics : stallHolderTopics)[
       index % customerTopics.length
     ];
@@ -400,23 +597,26 @@ List<Report> seedReports() {
     final decisions = ['Warning Issued', 'Account Blocked', 'Refund Approved', 'No Violation'];
     final actions = ['Warning Issued', 'Account Blocked', 'Refund Processed', 'Dismissed'];
 
+    final reporterEmail = isStallHolder
+        ? '${submittedBy.toLowerCase().replaceAll(RegExp(r'[^a-z]+'), '.')}@gmail.com'
+        : profile.email;
+
     return Report(
       id: '#RPT-${(index + 1) * 100}',
       type: type,
       accountIssue: accountIssue,
-      category: categories[index % categories.length],
+      category: profile.category,
       submittedBy: submittedBy,
       reason: reason,
       date: date,
       status: status,
       priority: priorities[index % priorities.length],
       description: description,
-      reporterEmail:
-          '${submittedBy.toLowerCase().replaceAll(RegExp(r'[^a-z]+'), '.')}@example.com',
-      phone: '+63 917 123 ${4500 + index}',
-      vendorName: isStallHolder ? accountIssue : submittedBy,
+      reporterEmail: reporterEmail,
+      phone: profile.phone,
+      vendorName: profile.name,
       owner: '',
-      stallNumber: 'Block ${12 + index}',
+      stallNumber: profile.location,
       previousViolations: (index % 3),
       notes: isResolved ? 'Resolved by admin officer after investigation.' : '',
       decision: isResolved ? decisions[index % decisions.length] : null,
@@ -532,7 +732,7 @@ List<Order> seedOrders() {
     (
       name: 'Aicel Castillo',
       category: 'FRESH FISH',
-      stall: 'Fresh Fish Section',
+      stall: 'Riverside Seafood',
       products: [
         ('Bangus', 220.0),
         ('Tilapia', 180.0),
@@ -541,7 +741,7 @@ List<Order> seedOrders() {
     (
       name: 'Mila Mendoza',
       category: 'MEAT',
-      stall: 'Meat Section',
+      stall: 'Harvest Meat Corner',
       products: [
         ('Pork Belly', 360.0),
         ('Beef Sirloin', 420.0),
@@ -550,7 +750,7 @@ List<Order> seedOrders() {
     (
       name: 'Elena Ramos',
       category: 'FRUITS',
-      stall: 'Fruit Section',
+      stall: 'North Market Fruits',
       products: [
         ('Mangoes', 180.0),
         ('Ripe Papaya & Bananas', 120.0),
@@ -559,7 +759,7 @@ List<Order> seedOrders() {
     (
       name: 'Sophie Sb',
       category: 'CHICKEN',
-      stall: 'Chicken Section',
+      stall: 'Southside Poultry',
       products: [
         ('Whole Dressed Chicken', 210.0),
         ('Chicken Wings & Thighs', 190.0),
@@ -568,7 +768,7 @@ List<Order> seedOrders() {
     (
       name: 'Emilio Navarro',
       category: 'VEGETABLES',
-      stall: 'Vegetables Section',
+      stall: 'Valley Harvest Vegetables',
       products: [
         ('Fresh Vegetables', 150.0),
         ('Pinakbet Pack', 110.0),
@@ -577,7 +777,7 @@ List<Order> seedOrders() {
     (
       name: 'Diosa Del Rosario',
       category: 'DRIED FISH',
-      stall: 'Dried Fish Section',
+      stall: 'Bicol Dry Goods',
       products: [
         ('Daing na Bangus', 160.0),
         ('Tuyô & Danggit', 140.0),
@@ -586,7 +786,7 @@ List<Order> seedOrders() {
     (
       name: 'Maria Clara Santos',
       category: 'MARITATAS',
-      stall: 'Maritatas Section',
+      stall: 'Sunrise Bakery Stall',
       products: [
         ('Cassava Cake & Delicacies', 120.0),
         ('Native Kakanin', 90.0),
@@ -595,7 +795,7 @@ List<Order> seedOrders() {
     (
       name: 'Antonio Reyes',
       category: 'SARI-SARI',
-      stall: 'Sari-Sari Section',
+      stall: 'Central Spice House',
       products: [
         ('Canned Goods & Essentials', 85.0),
         ('Cooking Oil & Condiments', 75.0),
@@ -826,8 +1026,8 @@ List<AuditLog> seedAuditLogs() {
       administratorName: adminName,
       action: AuditAction.blockAccount,
       targetEntityType: 'Vendor',
-      targetEntityId: 'VND-8494',
-      targetUserName: 'William Del Rosario Meat Shop',
+      targetEntityId: 'VND-92836',
+      targetUserName: 'William Del Rosario - Clara Vegetable Cart',
       previousValue: 'Active',
       newValue: 'Blocked',
       reason: 'Repeated underweight produce violations reported',
@@ -840,8 +1040,8 @@ List<AuditLog> seedAuditLogs() {
       administratorName: adminName,
       action: AuditAction.suspendAccount,
       targetEntityType: 'Vendor',
-      targetEntityId: 'VND-8495',
-      targetUserName: 'Sophie Sb’s store',
+      targetEntityId: 'VND-92837',
+      targetUserName: 'Sophie Sb - Southside Poultry',
       previousValue: 'Active',
       newValue: 'Suspended',
       reason: 'Pricing inconsistency under investigation',
@@ -939,7 +1139,7 @@ List<AuditLog> seedAuditLogs() {
       action: AuditAction.approveKyc,
       targetEntityType: 'VendorApplication',
       targetEntityId: '#APP-92839',
-      targetUserName: 'Benjamin Reyes',
+      targetUserName: 'Ricardo Santos',
       previousValue: 'Reviewing',
       newValue: 'Verified',
       reason: 'Stall permit and lease contract fully verified',

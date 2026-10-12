@@ -448,11 +448,12 @@ class AppDataController extends StateNotifier<AppDataState> {
       } else {
         final cleanName = current.applicant
             .toLowerCase()
-            .replaceAll(RegExp(r'[^a-z]+'), '.');
+            .replaceAll(RegExp(r'[^a-z0-9]+'), '.');
+        final digits = current.id.replaceAll(RegExp(r'[^0-9]'), '');
         final newVendor = Vendor(
-          id: 'VND-${8500 + updatedVendors.length + 1}',
+          id: 'VND-$digits',
           name: current.applicant,
-          email: '${cleanName.isEmpty ? 'vendor' : cleanName}@mepco.com',
+          email: '${cleanName.isEmpty ? 'vendor' : cleanName}@gmail.com',
           stallType: current.category,
           registeredAt: reviewedAt,
           status: AccountStatus.active,

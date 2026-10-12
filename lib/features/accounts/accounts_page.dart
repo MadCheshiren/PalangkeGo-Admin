@@ -240,12 +240,9 @@ class _AccountsPageState extends ConsumerState<AccountsPage> {
       .toList();
 
   Widget _vendorPanel(List<Vendor> values) {
-    const categories = [
+    final categories = <String>[
       'All Categories',
-      'Fruits',
-      'Vegetables',
-      'Meat',
-      'Fish',
+      ...values.map((v) => v.stallType).toSet(),
     ];
     final visible = values
         .where(

@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
-import '../../core/theme/theme_extensions.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/admin_widgets.dart';
 import '../../core/widgets/document_viewer_modal.dart';
@@ -243,14 +242,20 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
         (widget.renewal != null &&
             currentRenewal?.status != RenewalStatus.reviewing);
 
+    final effectiveApproved =
+        isApproved || (widget.isHistory && !isRejected);
+
     return Dialog(
       insetPadding: EdgeInsets.symmetric(
-        horizontal: narrow ? 10 : 55,
-        vertical: narrow ? 10 : 34,
+        horizontal: narrow ? 10 : 40,
+        vertical: narrow ? 10 : 24,
       ),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 970),
-        child: Padding(
+        constraints: BoxConstraints(
+          maxWidth: 1040,
+          maxHeight: MediaQuery.sizeOf(context).height * 0.92,
+        ),
+        child: SingleChildScrollView(
           padding: EdgeInsets.all(narrow ? 16 : 28),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -269,19 +274,23 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                                   : 'RENEWALS  /  RENEWAL REQUEST DETAIL')
                               : 'TENANTS  /  VERIFICATION DETAIL',
                           style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: isHistoricalView ? FontWeight.w700 : FontWeight.w400,
+                            fontSize: 9.5,
+                            fontWeight: isHistoricalView
+                                ? FontWeight.w700
+                                : FontWeight.w500,
                             letterSpacing: 0.5,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurface.withValues(alpha: isHistoricalView ? .75 : .5),
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(
+                                    alpha: isHistoricalView ? .75 : .5),
                           ),
                         ),
                         const SizedBox(height: 10),
                         Row(
                           children: [
-                            AvatarCircle(name: widget.applicant, size: 46),
-                            const SizedBox(width: 12),
+                            AvatarCircle(name: widget.applicant, size: 48),
+                            const SizedBox(width: 14),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -292,60 +301,92 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                                         child: Text(
                                           widget.applicant,
                                           overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
+                                          style: GoogleFonts.inter(
                                             fontSize: 22,
                                             fontWeight: FontWeight.w800,
                                           ),
                                         ),
                                       ),
                                       if (isHistoricalView) ...[
-                                        const SizedBox(width: 8),
+                                        const SizedBox(width: 10),
                                         Container(
                                           padding: const EdgeInsets.symmetric(
-                                            horizontal: 7,
-                                            vertical: 2.5,
+                                            horizontal: 8,
+                                            vertical: 3,
                                           ),
                                           decoration: BoxDecoration(
                                             color: Theme.of(context)
                                                 .colorScheme
                                                 .primary
                                                 .withValues(alpha: 0.12),
-                                            borderRadius: BorderRadius.circular(4),
+                                            borderRadius:
+                                                BorderRadius.circular(6),
                                             border: Border.all(
                                               color: Theme.of(context)
                                                   .colorScheme
                                                   .primary
-                                                  .withValues(alpha: 0.25),
+                                                  .withValues(alpha: 0.3),
                                             ),
                                           ),
                                           child: Text(
                                             'Archived Record',
                                             style: TextStyle(
-                                              fontSize: 9.5,
+                                              fontSize: 10,
                                               fontWeight: FontWeight.w700,
-                                              color: Theme.of(context).colorScheme.primary,
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .primary,
                                             ),
                                           ),
+                                        ),
+                                      ] else if (widget.renewal != null) ...[
+                                        const SizedBox(width: 10),
+                                        StatusBadge(
+                                          label: enumLabel(
+                                              currentRenewal?.status ??
+                                                  widget.renewal!.status),
+                                          kind: (currentRenewal?.status ??
+                                                      widget.renewal!.status) ==
+                                                  RenewalStatus.approved
+                                              ? BadgeKind.success
+                                              : (currentRenewal?.status ??
+                                                          widget.renewal!
+                                                              .status) ==
+                                                      RenewalStatus.expired
+                                                  ? BadgeKind.danger
+                                                  : BadgeKind.warning,
                                         ),
                                       ],
                                     ],
                                   ),
-                                  Text(
-                                    'Submitted: ${shortDate.format(currentRenewal?.submittedAt ?? currentApp?.submittedAt ?? widget.renewal?.submittedAt ?? widget.application?.submittedAt ?? DateTime.now())}  •  ${widget.location}',
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 10),
-                                  ),
+                                  if (!narrow) ...[
+                                    const SizedBox(height: 4),
+                                    _buildSubtitleWrap(
+                                      context,
+                                      currentApp,
+                                      currentRenewal,
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
                           ],
                         ),
+                        if (narrow) ...[
+                          const SizedBox(height: 8),
+                          _buildSubtitleWrap(
+                            context,
+                            currentApp,
+                            currentRenewal,
+                          ),
+                        ],
                       ],
                     ),
                   ),
                   IconButton(
                     onPressed: () => Navigator.pop(context),
                     icon: const Icon(Icons.close_rounded),
+                    tooltip: 'Close',
                   ),
                 ],
               ),
@@ -360,17 +401,17 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(flex: 68, child: _documents(context)),
-                    const SizedBox(width: 25),
+                    Expanded(flex: 64, child: _documents(context)),
+                    const SizedBox(width: 20),
                     Expanded(
-                        flex: 32,
+                        flex: 36,
                         child: _summary(context, currentApp, currentRenewal)),
                   ],
                 ),
               const SizedBox(height: 22),
               _buildActionSection(
                 context,
-                isApproved: isApproved,
+                isApproved: effectiveApproved,
                 isRejected: isRejected,
                 currentApp: currentApp,
                 currentRenewal: currentRenewal,
@@ -379,6 +420,105 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildSubtitleWrap(
+    BuildContext context,
+    VendorApplication? currentApp,
+    RenewalRequest? currentRenewal,
+  ) {
+    final narrow = MediaQuery.sizeOf(context).width < 600;
+    final submittedDate = currentRenewal?.submittedAt ??
+        currentApp?.submittedAt ??
+        widget.renewal?.submittedAt ??
+        widget.application?.submittedAt ??
+        DateTime.now();
+    final dateText = narrow
+        ? 'Submitted: ${DateFormat('MMM dd, yyyy').format(submittedDate)}'
+        : 'Submitted: ${DateFormat('MMM dd, yyyy, h:mm a').format(submittedDate)}';
+
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 10,
+      runSpacing: 4,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.assignment_outlined,
+              size: 13,
+              color: semanticColors(context).mutedText,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              'Renewal ID: #${widget.id}',
+              style: TextStyle(
+                fontSize: 11,
+                color: semanticColors(context).mutedText,
+              ),
+            ),
+          ],
+        ),
+        Text(
+          '•',
+          style: TextStyle(
+            fontSize: 11,
+            color: semanticColors(context).mutedText,
+          ),
+        ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.store_outlined,
+              size: 13,
+              color: semanticColors(context).mutedText,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              widget.location,
+              style: TextStyle(
+                fontSize: 11,
+                color: semanticColors(context).mutedText,
+              ),
+            ),
+          ],
+        ),
+        Text(
+          '•',
+          style: TextStyle(
+            fontSize: 11,
+            color: semanticColors(context).mutedText,
+          ),
+        ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.calendar_today_outlined,
+              size: 13,
+              color: semanticColors(context).mutedText,
+            ),
+            const SizedBox(width: 4),
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: narrow ? 230 : double.infinity,
+              ),
+              child: Text(
+                dateText,
+                overflow:
+                    narrow ? TextOverflow.ellipsis : TextOverflow.visible,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: semanticColors(context).mutedText,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -627,10 +767,39 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
               child: Text(
                 'Required Documents (${documents.length} of 5 Required Uploads)',
                 style: GoogleFonts.inter(
-                  fontSize: 15,
+                  fontSize: 14.5,
                   fontWeight: FontWeight.bold,
                   color: semanticColors(context).primaryText,
                 ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.25),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.check_circle_rounded,
+                    size: 12,
+                    color: Color(0xFF10B981),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${documents.length}/5 Completed',
+                    style: GoogleFonts.inter(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF10B981),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -642,9 +811,13 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
               : MediaQuery.sizeOf(context).width < 700
                   ? 2
                   : 3,
-          crossAxisSpacing: 14,
-          mainAxisSpacing: 14,
-          childAspectRatio: MediaQuery.sizeOf(context).width < 500 ? 1.6 : 1.15,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: MediaQuery.sizeOf(context).width < 500
+              ? 1.75
+              : MediaQuery.sizeOf(context).width < 700
+                  ? 1.3
+                  : 1.05,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           children: tiles,
@@ -659,7 +832,6 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
     int index,
     List<KycDocument> allDocuments,
   ) {
-    final asset = document.assetPath;
     final ext = document.filename.split('.').last.toLowerCase();
     final isPdf = ext == 'pdf' || document.mimeType.contains('pdf');
     final isWord =
@@ -668,9 +840,8 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
     return _doc(
       context,
       name: document.name,
-      asset: asset,
-      filename:
-          '${document.filename} • ${shortDate.format(document.uploadedAt)}',
+      filename: document.filename,
+      uploadedAt: document.uploadedAt,
       isPdf: isPdf,
       isWord: isWord,
       onTap: () {
@@ -690,105 +861,131 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
   Widget _doc(
     BuildContext context, {
     required String name,
-    required String? asset,
     required String filename,
+    required DateTime uploadedAt,
     required bool isPdf,
     required bool isWord,
     required VoidCallback onTap,
   }) {
     final colors = semanticColors(context);
 
-    final Widget content;
-    if (asset != null) {
-      content = Image.asset(
-        asset,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) =>
-            _docPlaceholderIcon(colors, isPdf, isWord),
-      );
-    } else {
-      content = _docPlaceholderIcon(colors, isPdf, isWord);
-    }
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        decoration: BoxDecoration(
-          color: colors.cardBackground,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: colors.subtleBorder, width: 1.2),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: ClipRRect(
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(11)),
-                child: content,
-              ),
-            ),
-            Tooltip(
-              message: '$name\n$filename',
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  border: Border(
-                    top: BorderSide(color: colors.subtleBorder, width: 0.8),
-                  ),
-                ),
-                child: Text(
-                  '$name\n$filename',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
-                    color: colors.primaryText,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _docPlaceholderIcon(
-      AppSemanticColors colors, bool isPdf, bool isWord) {
     final iconData = isPdf
         ? Icons.picture_as_pdf_rounded
         : isWord
             ? Icons.description_rounded
-            : Icons.description_outlined;
+            : Icons.image_rounded;
     final iconColor = isPdf
         ? const Color(0xFFEF4444)
         : isWord
             ? const Color(0xFF2563EB)
-            : colors.accent;
+            : const Color(0xFF10B981);
+    final iconBg = iconColor.withValues(alpha: 0.12);
 
-    return Center(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: iconColor.withValues(alpha: 0.1),
-          shape: BoxShape.circle,
-        ),
-        child: Icon(
-          iconData,
-          size: 38,
-          color: iconColor,
-        ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: colors.cardBackground,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colors.subtleBorder, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: iconBg,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Icon(
+                  iconData,
+                  size: 16,
+                  color: iconColor,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.all(2.5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.check_circle_rounded,
+                  size: 15,
+                  color: Color(0xFF10B981),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: colors.primaryText,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  filename,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 9.5,
+                    color: colors.mutedText,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  'Uploaded on ${shortDate.format(uploadedAt)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 8.5,
+                    color: colors.mutedText,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          OutlinedButton.icon(
+            onPressed: onTap,
+            icon: const Icon(Icons.visibility_outlined, size: 13),
+            label: const Text('View Document'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(28),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              side: BorderSide(color: colors.subtleBorder),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6),
+              ),
+              textStyle: GoogleFonts.inter(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -832,43 +1029,85 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                 ),
               ),
               const SizedBox(height: 14),
-              _item('BUSINESS NAME', widget.stall),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 13),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('CATEGORY', style: TextStyle(fontSize: 8.5)),
-                    const SizedBox(height: 5),
-                    CategoryBadge(category: widget.category),
-                  ],
-                ),
+              _summaryField(
+                context,
+                icon: Icons.storefront_outlined,
+                label: 'BUSINESS NAME',
+                value: widget.stall,
               ),
-              _item('CONTACT NO.', '+63 921 555 0123'),
-              _item(
-                'EMAIL ADDRESS',
-                '${widget.applicant.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '.')}@gmail.com',
+              _summaryCategoryField(
+                context,
+                icon: Icons.category_outlined,
+                label: 'STALL CATEGORY',
+                category: widget.category,
               ),
-              if (app?.status == ApplicationStatus.verified ||
-                  renewal?.status == RenewalStatus.approved) ...[
-                const SizedBox(height: 6),
-                OutlinedButton.icon(
-                  onPressed: () {
-                    final targetId =
-                        'VND-${widget.id.replaceAll(RegExp(r'[^0-9]'), '')}';
-                    Navigator.pop(context);
-                    context.go('/accounts?accountId=$targetId&open=1');
-                  },
-                  icon: const Icon(Icons.person_outline_rounded, size: 15),
-                  label: const Text('View Account Profile'),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(36),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+              _summaryField(
+                context,
+                icon: Icons.phone_outlined,
+                label: 'CONTACT NUMBER',
+                value: () {
+                  final latestVendors = ref.watch(appDataProvider).vendors;
+                  final vendor = latestVendors.cast<Vendor?>().firstWhere(
+                        (v) =>
+                            v?.id ==
+                                'VND-${widget.id.replaceAll(RegExp(r'[^0-9]'), '')}' ||
+                            v?.name.trim().toLowerCase() ==
+                                widget.applicant.trim().toLowerCase(),
+                        orElse: () => null,
+                      );
+                  if (vendor != null && vendor.phone.isNotEmpty) {
+                    return vendor.phone;
+                  }
+                  final idNum = int.tryParse(
+                    widget.id.replaceAll(RegExp(r'[^0-9]'), ''),
+                  );
+                  if (idNum != null && idNum >= 92834 && idNum < 92834 + 25) {
+                    return '+63 921 555 ${1000 + (idNum - 92834)}';
+                  }
+                  return '+63 921 555 0123';
+                }(),
+              ),
+              _summaryField(
+                context,
+                icon: Icons.email_outlined,
+                label: 'EMAIL ADDRESS',
+                value: () {
+                  final latestVendors = ref.watch(appDataProvider).vendors;
+                  final vendor = latestVendors.cast<Vendor?>().firstWhere(
+                        (v) =>
+                            v?.id ==
+                                'VND-${widget.id.replaceAll(RegExp(r'[^0-9]'), '')}' ||
+                            v?.name.trim().toLowerCase() ==
+                                widget.applicant.trim().toLowerCase(),
+                        orElse: () => null,
+                      );
+                  if (vendor != null && vendor.email.isNotEmpty) {
+                    return vendor.email;
+                  }
+                  return '${widget.applicant.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '.')}@gmail.com';
+                }(),
+              ),
+              const SizedBox(height: 4),
+              OutlinedButton.icon(
+                onPressed: () {
+                  final targetId =
+                      'VND-${widget.id.replaceAll(RegExp(r'[^0-9]'), '')}';
+                  Navigator.pop(context);
+                  context.go('/accounts?accountId=$targetId&open=1');
+                },
+                icon: const Icon(Icons.person_outline_rounded, size: 15),
+                label: const Text('View Account Profile'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(36),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  textStyle: GoogleFonts.inter(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-              ],
+              ),
             ],
           ),
         ),
@@ -897,6 +1136,81 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
           ),
         ],
       ],
+    );
+  }
+
+  Widget _summaryField(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    final colors = semanticColors(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 12, color: colors.mutedText),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 8.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                  color: colors.mutedText,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 3),
+          Text(
+            value,
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: colors.primaryText,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryCategoryField(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required String category,
+  }) {
+    final colors = semanticColors(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 12, color: colors.mutedText),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 8.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                  color: colors.mutedText,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          CategoryBadge(category: category),
+        ],
+      ),
     );
   }
 
@@ -929,18 +1243,21 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 6,
+            runSpacing: 4,
             children: [
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
                     Icons.history_rounded,
-                    size: 14,
+                    size: 13,
                     color: colors.secondaryText,
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 5),
                   Text(
                     'RENEWAL HISTORY',
                     style: GoogleFonts.inter(
@@ -957,7 +1274,7 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                 children: [
                   Container(
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
                       color: const Color(0xFF10B981).withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(4),
@@ -965,13 +1282,13 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                     child: Text(
                       'Good Standing',
                       style: GoogleFonts.inter(
-                        fontSize: 9,
+                        fontSize: 8.5,
                         fontWeight: FontWeight.w700,
                         color: const Color(0xFF10B981),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 4),
                   InkWell(
                     onTap: () => _showAllRenewalHistoryModal(
                       context,
@@ -987,14 +1304,14 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                           Text(
                             'View All',
                             style: GoogleFonts.inter(
-                              fontSize: 9.5,
+                              fontSize: 9,
                               fontWeight: FontWeight.w700,
                               color: colors.accent,
                             ),
                           ),
                           Icon(
                             Icons.chevron_right_rounded,
-                            size: 13,
+                            size: 12,
                             color: colors.accent,
                           ),
                         ],
