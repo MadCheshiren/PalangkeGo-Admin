@@ -834,7 +834,8 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
       Navigator.pop(context);
       messenger.showSnackBar(
         const SnackBar(
-          content: Text('Report resolved successfully. Moved to Resolved Reports.'),
+          content:
+              Text('Report resolved successfully. Moved to Resolved Reports.'),
         ),
       );
     } finally {
@@ -1782,7 +1783,8 @@ class _EvidenceViewerDialogState extends State<_EvidenceViewerDialog> {
                 color: colors.heroBackground,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(Icons.image_outlined, color: colors.heroForeground, size: 20),
+              child: Icon(Icons.image_outlined,
+                  color: colors.heroForeground, size: 20),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -1849,7 +1851,9 @@ class _EvidenceViewerDialogState extends State<_EvidenceViewerDialog> {
               colors: colors,
               tooltip: 'Open full view',
               semanticLabel: 'Open evidence in full view',
-              icon: _fullView ? Icons.fullscreen_exit_outlined : Icons.open_in_full_outlined,
+              icon: _fullView
+                  ? Icons.fullscreen_exit_outlined
+                  : Icons.open_in_full_outlined,
               onPressed: () => setState(() => _fullView = !_fullView),
             ),
             const SizedBox(width: 10),
@@ -1872,7 +1876,8 @@ class _EvidenceViewerDialogState extends State<_EvidenceViewerDialog> {
     required IconData icon,
     required VoidCallback? onPressed,
     bool close = false,
-  }) => Semantics(
+  }) =>
+      Semantics(
         button: true,
         label: semanticLabel,
         child: Tooltip(
@@ -1884,13 +1889,17 @@ class _EvidenceViewerDialogState extends State<_EvidenceViewerDialog> {
             style: IconButton.styleFrom(
               minimumSize: const Size(42, 42),
               maximumSize: const Size(42, 42),
-              foregroundColor: close ? colors.heroBackground : colors.primaryText,
+              foregroundColor:
+                  close ? colors.heroBackground : colors.primaryText,
               disabledForegroundColor: colors.disabledText,
               backgroundColor: close
                   ? colors.heroBackground.withValues(alpha: 0.12)
                   : colors.tableHeader,
-              side: close ? BorderSide.none : BorderSide(color: colors.subtleBorder),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              side: close
+                  ? BorderSide.none
+                  : BorderSide(color: colors.subtleBorder),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
             ),
           ),
         ),
@@ -1907,7 +1916,9 @@ class _EvidenceViewerDialogState extends State<_EvidenceViewerDialog> {
             children: [
               MouseRegion(
                 cursor: _zoomIndex > 0
-                    ? (_isDragging ? SystemMouseCursors.grabbing : SystemMouseCursors.grab)
+                    ? (_isDragging
+                        ? SystemMouseCursors.grabbing
+                        : SystemMouseCursors.grab)
                     : SystemMouseCursors.basic,
                 child: GestureDetector(
                   onDoubleTap: () => _setZoom(_zoomIndex == 0 ? 2 : 0),
@@ -1932,22 +1943,27 @@ class _EvidenceViewerDialogState extends State<_EvidenceViewerDialog> {
                         width: double.infinity,
                         height: double.infinity,
                         fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) => _errorState(colors),
+                        errorBuilder: (context, error, stackTrace) =>
+                            _errorState(colors),
                       ),
                     ),
                   ),
                 ),
               ),
               if (_index > 0)
-                _arrowButton(colors, Icons.chevron_left_rounded, () => _changeEvidence(-1), Alignment.centerLeft),
+                _arrowButton(colors, Icons.chevron_left_rounded,
+                    () => _changeEvidence(-1), Alignment.centerLeft),
               if (_index < widget.evidence.length - 1)
-                _arrowButton(colors, Icons.chevron_right_rounded, () => _changeEvidence(1), Alignment.centerRight),
+                _arrowButton(colors, Icons.chevron_right_rounded,
+                    () => _changeEvidence(1), Alignment.centerRight),
             ],
           ),
         ),
       );
 
-  Widget _arrowButton(AppSemanticColors colors, IconData icon, VoidCallback onPressed, Alignment alignment) => Align(
+  Widget _arrowButton(AppSemanticColors colors, IconData icon,
+          VoidCallback onPressed, Alignment alignment) =>
+      Align(
         alignment: alignment,
         child: Container(
           decoration: BoxDecoration(
@@ -1961,7 +1977,9 @@ class _EvidenceViewerDialogState extends State<_EvidenceViewerDialog> {
             ],
           ),
           child: IconButton(
-            tooltip: icon == Icons.chevron_left_rounded ? 'Previous evidence' : 'Next evidence',
+            tooltip: icon == Icons.chevron_left_rounded
+                ? 'Previous evidence'
+                : 'Next evidence',
             onPressed: onPressed,
             style: IconButton.styleFrom(
               minimumSize: const Size(44, 44),
@@ -1980,7 +1998,8 @@ class _EvidenceViewerDialogState extends State<_EvidenceViewerDialog> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.broken_image_outlined, color: colors.warning, size: 34),
+              Icon(Icons.broken_image_outlined,
+                  color: colors.warning, size: 34),
               const SizedBox(height: 10),
               Text(
                 'Unable to load evidence',
@@ -2036,7 +2055,9 @@ class _EvidenceViewerDialogState extends State<_EvidenceViewerDialog> {
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: selected ? colors.heroBackground : colors.subtleBorder,
+                            color: selected
+                                ? colors.heroBackground
+                                : colors.subtleBorder,
                             width: selected ? 2 : 1,
                           ),
                         ),
@@ -2049,9 +2070,12 @@ class _EvidenceViewerDialogState extends State<_EvidenceViewerDialog> {
                       Text(
                         '${index + 1}. ${item.label}',
                         style: TextStyle(
-                          color: selected ? colors.heroBackground : colors.secondaryText,
+                          color: selected
+                              ? colors.heroBackground
+                              : colors.secondaryText,
                           fontSize: 9,
-                          fontWeight: selected ? FontWeight.w700 : FontWeight.normal,
+                          fontWeight:
+                              selected ? FontWeight.w700 : FontWeight.normal,
                         ),
                       ),
                     ],
