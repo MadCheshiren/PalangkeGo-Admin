@@ -412,6 +412,9 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
     final dateText = narrow
         ? 'Submitted: ${DateFormat('MMM dd, yyyy').format(submittedDate)}'
         : 'Submitted: ${DateFormat('MMM dd, yyyy, h:mm a').format(submittedDate)}';
+    // This dialog serves both application and renewal review records.
+    final idLabel =
+        widget.application == null ? 'Renewal ID' : 'Application ID';
 
     return Wrap(
       crossAxisAlignment: WrapCrossAlignment.center,
@@ -428,7 +431,7 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
             ),
             const SizedBox(width: 4),
             Text(
-              'Renewal ID: #${widget.id}',
+              '$idLabel: #${widget.id.replaceFirst(RegExp(r'^#+'), '')}',
               style: TextStyle(
                 fontSize: 11,
                 color: semanticColors(context).mutedText,
