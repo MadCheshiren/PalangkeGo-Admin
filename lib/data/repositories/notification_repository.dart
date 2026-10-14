@@ -93,6 +93,34 @@ List<AdminNotification> _seedNotifications() {
   final now = DateTime.now();
   return [
     AdminNotification(
+      id: 'closure-request-1',
+      title: 'Stall Closure Request',
+      message:
+          'Sophie Sb submitted a request to close stall and surrender lease.',
+      type: NotificationType.accountUpdate,
+      createdAt: now.subtract(const Duration(minutes: 18)),
+      isRead: false,
+      target: const NotificationTarget(
+        type: NotificationTargetType.vendor,
+        id: 'VND-92837',
+      ),
+      actionLabel: 'Review Closure Request',
+    ),
+    AdminNotification(
+      id: 'relocation-request-1',
+      title: 'Stall Relocation Request',
+      message:
+          'Diosa Del Rosario requested relocation to Stall #02, Fish Section.',
+      type: NotificationType.accountUpdate,
+      createdAt: now.subtract(const Duration(hours: 1)),
+      isRead: false,
+      target: const NotificationTarget(
+        type: NotificationTargetType.vendor,
+        id: 'VND-92835',
+      ),
+      actionLabel: 'Review Relocation Request',
+    ),
+    AdminNotification(
       id: 'vendor-application-1',
       title: 'New Stall Holder Application',
       message: 'Ricardo Santos submitted a stall holder application.',

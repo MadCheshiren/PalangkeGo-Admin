@@ -12,7 +12,7 @@ enum NotificationType {
 /// This maps directly to the future backend notification fields
 /// (`targetType` and `targetId`) while keeping navigation details out of the
 /// seeded mock records.
-enum NotificationTargetType { application, renewal, report, customer }
+enum NotificationTargetType { application, renewal, report, customer, vendor }
 
 class NotificationTarget {
   const NotificationTarget({required this.type, required this.id});
@@ -26,7 +26,9 @@ class NotificationTarget {
       NotificationTargetType.application => '/applications',
       NotificationTargetType.renewal => '/renewal',
       NotificationTargetType.report => '/reports',
-      NotificationTargetType.customer => '/accounts',
+      NotificationTargetType.customer ||
+      NotificationTargetType.vendor =>
+        '/accounts',
     };
     switch (type) {
       case NotificationTargetType.application:
@@ -38,6 +40,9 @@ class NotificationTarget {
       case NotificationTargetType.customer:
         parameters['accountId'] = id;
         parameters['tab'] = 'customers';
+      case NotificationTargetType.vendor:
+        parameters['accountId'] = id;
+        parameters['tab'] = 'vendors';
     }
     return Uri(path: path, queryParameters: parameters).toString();
   }

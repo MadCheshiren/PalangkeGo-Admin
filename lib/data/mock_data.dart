@@ -353,10 +353,14 @@ List<Vendor> seedVendors({List<Order>? ordersSource}) {
       4 => AccountStatus.offline,
       6 => AccountStatus.suspended,
       7 => AccountStatus.blocked,
+      10 => AccountStatus.blocked,
       19 => AccountStatus.offline,
       _ => AccountStatus.active,
     };
-    final isBlocked = status == AccountStatus.blocked;
+    final isStallClosed = index == 10;
+    final isBlocked = status == AccountStatus.blocked && !isStallClosed;
+    final isClosureRequested = index == 3;
+    final isRelocationRequested = index == 1;
     final stats = vendorStats[profile.name];
     final orderCount = stats?.$1 ?? (1429 - index * 31);
     final totalTransactions = stats?.$2 ?? (42800 - index * 875).toDouble();
@@ -368,24 +372,48 @@ List<Vendor> seedVendors({List<Order>? ordersSource}) {
       stallType: profile.stallType,
       registeredAt: base.add(Duration(days: index * 8, hours: index % 7)),
       status: status,
-      location: profile.location,
+      location: isStallClosed ? 'Archived (${profile.location})' : profile.location,
       orders: orderCount,
       transactions: totalTransactions,
       phone: profile.phone,
       residence: profile.residence,
-      administrativeNotes: isBlocked
-          ? 'Account permanently restricted due to policy violations.'
-          : status == AccountStatus.suspended
-              ? 'Account temporarily under administrative review.'
-              : 'Stall holder account verified.',
-      blockedReason: isBlocked
-          ? 'Repeated non-compliance with market sanitary guidelines and unauthorized subletting.'
-          : null,
+      administrativeNotes: isStallClosed
+          ? 'Stall operations concluded. Formal lease surrender completed and stall archived. Order and financial records preserved for audits.'
+          : isBlocked
+              ? 'Account permanently restricted due to policy violations.'
+              : status == AccountStatus.suspended
+                  ? 'Account temporarily under administrative review.'
+                  : isClosureRequested
+                      ? 'Stall holder submitted formal request to close stall and surrender lease.'
+                      : isRelocationRequested
+                          ? 'Stall holder requested transfer to Stall #02, Fish Section.'
+                          : 'Stall holder account verified.',
+      blockedReason: isStallClosed
+          ? 'Stall closed upon vendor request: Formal lease surrender and voluntary retirement.'
+          : isBlocked
+              ? 'Repeated non-compliance with market sanitary guidelines and unauthorized subletting.'
+              : null,
       blockedFromReportId: isBlocked ? '#REP-${1040 + index}' : null,
-      blockedAt: isBlocked
-          ? DateTime(2024, 1, 15).subtract(Duration(days: index * 2))
+      blockedAt: isStallClosed
+          ? DateTime(2024, 2, 10, 14, 30)
+          : isBlocked
+              ? DateTime(2024, 1, 15).subtract(Duration(days: index * 2))
+              : null,
+      blockedBy: (isBlocked || isStallClosed) ? 'Kirren Michael Fraginal' : null,
+      closureRequestedAt: isClosureRequested
+          ? DateTime.now().subtract(const Duration(hours: 14))
           : null,
-      blockedBy: isBlocked ? 'Kirren Michael Fraginal' : null,
+      closureReason: isClosureRequested
+          ? 'Retiring from wet market operations after 18 years of service.'
+          : null,
+      relocationRequestedAt: isRelocationRequested
+          ? DateTime.now().subtract(const Duration(hours: 6))
+          : null,
+      relocationTargetLocation:
+          isRelocationRequested ? 'Stall #02, Fish Section' : null,
+      relocationReason: isRelocationRequested
+          ? 'Requesting relocation closer to primary water and drainage line.'
+          : null,
     );
   });
 }

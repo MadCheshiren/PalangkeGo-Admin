@@ -318,6 +318,129 @@ class AppDataController extends StateNotifier<AppDataState> {
     );
   }
 
+  Future<void> approveVendorClosure(
+    String id, {
+    required String administrativeNotes,
+  }) async {
+    final previous = _firstOrNull(state.vendors.where((item) => item.id == id));
+    final hasActiveOrders = state.orders.any(
+      (o) =>
+          (o.transactionId == id || o.vendorName == previous?.name) &&
+          (o.status == OrderStatus.pending || o.status == OrderStatus.processing),
+    );
+    if (hasActiveOrders) {
+      throw StateError(
+        'Cannot close stall: vendor has active orders that must be completed or refunded first.',
+      );
+    }
+    if (firebaseEnabled) {
+      final error =
+          await FirebaseAdminService.instance.setAccountBlocked(id, true);
+      if (error != null) debugPrint('[admin] approveVendorClosure: $error');
+      await reload();
+      return;
+    }
+    await _wait();
+    final vendors = state.vendors
+        .map(
+          (vendor) => vendor.id == id
+              ? vendor.copyWith(
+                  status: AccountStatus.blocked,
+                  administrativeNotes: administrativeNotes,
+                  blockedReason: vendor.closureReason?.isNotEmpty == true
+                      ? 'Stall closed upon vendor request: ${vendor.closureReason}'
+                      : 'Stall closed upon vendor request.',
+                  blockedAt: DateTime.now(),
+                  blockedBy: 'Admin',
+                  clearClosureRequest: true,
+                )
+              : vendor,
+        )
+        .toList();
+    state = state.copyWith(vendors: vendors);
+    final blocked = vendors
+        .where((vendor) => vendor.status == AccountStatus.blocked)
+        .map((vendor) => vendor.id)
+        .toList();
+    await _preferences.setStringList('blocked_vendors', blocked);
+    await _persistBlockedDetails();
+    await recordAudit(
+      action: AuditAction.blockAccount,
+      targetEntityType: 'Stall Holder',
+      targetEntityId: id,
+      targetUserName: previous?.name ?? id,
+      previousValue: enumLabel(previous?.status ?? AccountStatus.active),
+      newValue: 'Closed / Blocked',
+      reason: administrativeNotes,
+      metadata: {
+        if (previous?.closureReason != null)
+          'closureReason': previous!.closureReason!,
+        if (previous?.closureRequestedAt != null)
+          'requestedAt': previous!.closureRequestedAt!.toIso8601String(),
+      },
+    );
+  }
+
+  Future<void> dismissVendorClosureRequest(
+    String id, {
+    required String administrativeNotes,
+  }) async {
+    await _wait();
+    final previous = _firstOrNull(state.vendors.where((item) => item.id == id));
+    final vendors = state.vendors
+        .map(
+          (vendor) => vendor.id == id
+              ? vendor.copyWith(
+                  administrativeNotes: administrativeNotes,
+                  clearClosureRequest: true,
+                )
+              : vendor,
+        )
+        .toList();
+    state = state.copyWith(vendors: vendors);
+    await recordAudit(
+      action: AuditAction.editAccountStatus,
+      targetEntityType: 'Stall Holder',
+      targetEntityId: id,
+      targetUserName: previous?.name ?? id,
+      previousValue: 'Closure Requested',
+      newValue: enumLabel(previous?.status ?? AccountStatus.active),
+      reason: administrativeNotes,
+    );
+  }
+
+  Future<void> reassignVendorLocation(
+    String id, {
+    required String newLocation,
+    String? newCategory,
+    required String administrativeNotes,
+  }) async {
+    await _wait();
+    final previous = _firstOrNull(state.vendors.where((item) => item.id == id));
+    final vendors = state.vendors
+        .map(
+          (vendor) => vendor.id == id
+              ? vendor.copyWith(
+                  location: newLocation,
+                  stallType: newCategory ?? vendor.stallType,
+                  administrativeNotes: administrativeNotes,
+                  clearRelocationRequest: true,
+                )
+              : vendor,
+        )
+        .toList();
+    state = state.copyWith(vendors: vendors);
+    await recordAudit(
+      action: AuditAction.editAccountStatus,
+      targetEntityType: 'Stall Holder',
+      targetEntityId: id,
+      targetUserName: previous?.name ?? id,
+      previousValue: '${previous?.location} (${previous?.stallType})',
+      newValue: '$newLocation (${newCategory ?? previous?.stallType})',
+      reason: administrativeNotes,
+    );
+  }
+
   Future<void> updateCustomerAccount(
     String id, {
     required AccountStatus status,
