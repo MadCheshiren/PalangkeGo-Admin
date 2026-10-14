@@ -83,34 +83,30 @@ class _TopNavigationState extends ConsumerState<_TopNavigation> {
       child: isMobile
           ? Row(
               children: [
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: const AppLogo(
-                      dark: true,
-                      compact: true,
-                      showTagline: false,
-                      showAdminBadge: false,
-                    ),
+                const AppLogo(
+                  dark: true,
+                  compact: true,
+                  showTagline: false,
+                  showAdminBadge: false,
+                ),
+                const SizedBox(width: 4),
+                Builder(
+                  builder: (context) => IconButton(
+                    tooltip: 'Open navigation',
+                    onPressed: () => Scaffold.of(context).openDrawer(),
+                    icon: const Icon(Icons.menu_rounded, color: Colors.white),
                   ),
                 ),
-                Row(
+                const Spacer(),
+                const Row(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Builder(
-                      builder: (context) => IconButton(
-                        tooltip: 'Open navigation',
-                        onPressed: () => Scaffold.of(context).openDrawer(),
-                        icon:
-                            const Icon(Icons.menu_rounded, color: Colors.white),
-                      ),
-                    ),
-                    const _ThemeToggleButton(),
-                    const SizedBox(width: 4),
-                    const NotificationBell(),
-                    const SizedBox(width: 6),
-                    const AdminProfileMenu(compact: true),
+                    _ThemeToggleButton(),
+                    SizedBox(width: 4),
+                    NotificationBell(),
+                    SizedBox(width: 6),
+                    AdminProfileMenu(compact: true),
                   ],
                 ),
               ],
