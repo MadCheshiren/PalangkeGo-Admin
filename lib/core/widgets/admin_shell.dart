@@ -83,19 +83,19 @@ class _TopNavigationState extends ConsumerState<_TopNavigation> {
       child: isMobile
           ? Row(
               children: [
-                const AppLogo(
-                  dark: true,
-                  compact: true,
-                  showTagline: false,
-                  showAdminBadge: false,
-                ),
-                const SizedBox(width: 4),
                 Builder(
                   builder: (context) => IconButton(
                     tooltip: 'Open navigation',
                     onPressed: () => Scaffold.of(context).openDrawer(),
                     icon: const Icon(Icons.menu_rounded, color: Colors.white),
                   ),
+                ),
+                const SizedBox(width: 2),
+                const AppLogo(
+                  dark: true,
+                  compact: true,
+                  showTagline: false,
+                  showAdminBadge: false,
                 ),
                 const Spacer(),
                 const Row(
