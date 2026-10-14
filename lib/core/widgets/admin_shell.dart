@@ -81,33 +81,34 @@ class _TopNavigationState extends ConsumerState<_TopNavigation> {
         ),
       ),
       child: isMobile
-          ? Row(
+          ? Stack(
+              alignment: Alignment.center,
               children: [
-                Builder(
-                  builder: (context) => IconButton(
-                    tooltip: 'Open navigation',
-                    onPressed: () => Scaffold.of(context).openDrawer(),
-                    icon: const Icon(Icons.menu_rounded, color: Colors.white),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Builder(
+                    builder: (context) => IconButton(
+                      tooltip: 'Open navigation',
+                      onPressed: () => Scaffold.of(context).openDrawer(),
+                      icon: const Icon(Icons.menu_rounded, color: Colors.white),
+                    ),
                   ),
                 ),
-                const SizedBox(width: 2),
-                const AppLogo(
-                  dark: true,
-                  compact: true,
-                  showTagline: false,
-                  showAdminBadge: false,
+                const Align(
+                  alignment: Alignment.center,
+                  child: AppLogo(
+                    dark: true,
+                    compact: true,
+                    showTagline: false,
+                    showAdminBadge: false,
+                  ),
                 ),
-                const Spacer(),
-                const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    _ThemeToggleButton(),
-                    SizedBox(width: 4),
-                    NotificationBell(),
-                    SizedBox(width: 6),
-                    AdminProfileMenu(compact: true),
-                  ],
+                const Align(
+                  alignment: Alignment.centerRight,
+                  child: AdminProfileMenu(
+                    compact: true,
+                    showMobileActions: true,
+                  ),
                 ),
               ],
             )

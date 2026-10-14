@@ -5,13 +5,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../data/repositories/auth_repository.dart';
+import '../../data/repositories/notification_repository.dart';
 import '../../features/admin_settings/admin_settings_page.dart';
+import '../theme/theme_controller.dart';
 import 'admin_widgets.dart';
 
 class AdminProfileMenu extends ConsumerWidget {
-  const AdminProfileMenu({super.key, required this.compact});
+  const AdminProfileMenu({
+    super.key,
+    required this.compact,
+    this.showMobileActions = false,
+  });
 
   final bool compact;
+  final bool showMobileActions;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -45,6 +52,7 @@ class AdminProfileMenu extends ConsumerWidget {
           width: width,
           child: _AdminProfileDropdown(
             profile: profile,
+            showMobileActions: showMobileActions,
             onAccountSettings: () => showDialog<void>(
               context: context,
               builder: (dialogContext) => const AdminSettingsDialog(),
@@ -191,11 +199,13 @@ class _AdminProfileTrigger extends StatelessWidget {
 class _AdminProfileDropdown extends ConsumerWidget {
   const _AdminProfileDropdown({
     required this.profile,
+    required this.showMobileActions,
     required this.onAccountSettings,
     required this.onLogout,
   });
 
   final AdminProfile profile;
+  final bool showMobileActions;
   final VoidCallback onAccountSettings;
   final VoidCallback onLogout;
 
@@ -203,6 +213,11 @@ class _AdminProfileDropdown extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final colors = semanticColors(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final unread = ref
+        .watch(notificationProvider)
+        .where((notification) => !notification.isRead)
+        .length;
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: Material(
@@ -252,6 +267,37 @@ class _AdminProfileDropdown extends ConsumerWidget {
               ),
             ),
             Divider(height: 1, color: theme.dividerColor.withValues(alpha: .65)),
+            // Mobile header controls live here to keep the logo centered.
+            if (showMobileActions) ...[
+              _ProfileMenuItem(
+                icon: Icons.notifications_none_rounded,
+                label: unread == 0 ? 'Notifications' : 'Notifications ($unread)',
+                onTap: () {
+                  MenuController.maybeOf(context)?.close();
+                  context.go('/notifications');
+                },
+              ),
+              Divider(
+                height: 1,
+                color: theme.dividerColor.withValues(alpha: .65),
+              ),
+              _ProfileMenuItem(
+                icon: isDark
+                    ? Icons.light_mode_outlined
+                    : Icons.dark_mode_outlined,
+                label: isDark ? 'Switch to light mode' : 'Switch to dark mode',
+                onTap: () {
+                  ref
+                      .read(themeModeProvider.notifier)
+                      .toggleResolved(theme.brightness);
+                  MenuController.maybeOf(context)?.close();
+                },
+              ),
+              Divider(
+                height: 1,
+                color: theme.dividerColor.withValues(alpha: .65),
+              ),
+            ],
             _ProfileMenuItem(
               icon: Icons.history_rounded,
               label: 'Audit log',
