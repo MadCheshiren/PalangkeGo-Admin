@@ -1765,7 +1765,7 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                             ),
                           ),
                           style: FilledButton.styleFrom(
-                            backgroundColor: isDark ? const Color(0xFF10B981) : const Color(0xFF0F522E),
+                            backgroundColor: isDark ? const Color(0xFF10B981) : const Color(0xFF059669),
                             foregroundColor: Colors.white,
                             disabledBackgroundColor: isDark
                                 ? const Color(0xFF334155)
@@ -2174,7 +2174,7 @@ class _AnnouncementImageCropDialogState extends State<AnnouncementImageCropDialo
           future: _decodedImage,
           builder: (context, snapshot) => FilledButton.icon(
             style: FilledButton.styleFrom(
-              backgroundColor: isDark ? const Color(0xFF10B981) : const Color(0xFF0F522E),
+              backgroundColor: isDark ? const Color(0xFF10B981) : const Color(0xFF059669),
               foregroundColor: Colors.white,
               disabledBackgroundColor: isDark
                   ? const Color(0xFF334155)

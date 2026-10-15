@@ -2061,6 +2061,10 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
                 if (locController.text.trim().isEmpty) return;
                 Navigator.pop(dialogContext, true);
               },
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF059669),
+                foregroundColor: Colors.white,
+              ),
               icon: const Icon(Icons.check_rounded, size: 16),
               label: const Text('Save Reassignment'),
             ),
@@ -2874,7 +2878,6 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
   }
 
   Widget _footer(BuildContext context) {
-    final colors = semanticColors(context);
     final isStallClosed = widget.account.accountType == 'Stall Holder' &&
         (widget.account.blockedReason?.toLowerCase().contains('stall closed') == true ||
             widget.account.blockedReason?.toLowerCase().contains('closed upon') == true);
@@ -3035,7 +3038,7 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
             child: FilledButton.icon(
               onPressed: busy ? null : _save,
               style: FilledButton.styleFrom(
-                backgroundColor: colors.heroBackground,
+                backgroundColor: const Color(0xFF059669),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(22),
