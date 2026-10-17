@@ -210,8 +210,8 @@ void main() {
         activeFilters: 'Stall Holders | Active | Vegetables',
       );
 
-      expect(doc.reportName, 'Accounts Report');
-      expect(doc.filenamePrefix, 'palengkego_accounts_report');
+      expect(doc.reportName, 'Stall Holder Accounts Report');
+      expect(doc.filenamePrefix, 'palengkego_stall_holder_accounts_report');
       expect(doc.header.activeFilters, 'Stall Holders | Active | Vegetables');
 
       // Table rows should strictly contain only filtered vendors
@@ -300,6 +300,20 @@ void main() {
       expect(doc.summary.items.any((item) => item.label == 'Resolved'), isTrue);
     });
 
+    test('ComplaintExportData labels customer exports', () {
+      final reports = seedReports().where((r) => r.type == 'Customer').toList();
+      final doc = ComplaintExportData.build(
+        allReports: seedReports(),
+        filteredReports: reports,
+        activeFilters: 'Account Type: Customers',
+        accountType: 'Customers',
+      );
+
+      expect(doc.reportName, 'Customer Complaints');
+      expect(doc.header.reportTitle, 'Customer Complaints Report');
+      expect(doc.filenamePrefix, 'palengkego_customer_complaints_report');
+    });
+
     test('AnnouncementExportData computes metrics and status values', () {
       final allAnnouncements = seedAnnouncements();
       final doc = AnnouncementExportData.build(
@@ -316,6 +330,26 @@ void main() {
           isTrue);
       expect(doc.summary.items.any((item) => item.label == 'Delivered Notices'),
           isTrue);
+    });
+
+    test('AnnouncementExportData labels stall holder exports', () {
+      final announcements = seedAnnouncements();
+      final doc = AnnouncementExportData.build(
+        allAnnouncements: announcements,
+        filteredAnnouncements: announcements,
+        activeFilters: 'Stall Holders',
+        audience: 'Stall Holders',
+      );
+
+      expect(doc.reportName, 'Stall Holder Announcements');
+      expect(
+        doc.header.reportTitle,
+        'Stall Holder Announcement History Report',
+      );
+      expect(
+        doc.filenamePrefix,
+        'palengkego_stall_holder_announcements_report',
+      );
     });
 
     test('AuditExportData maintains chronological order and action logging',

@@ -392,22 +392,6 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
             icon: const Icon(Icons.chevron_right_rounded, size: 18),
             label: const Text('Next'),
           ),
-          const SizedBox(width: 16),
-          FilledButton.icon(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                      'Downloading ${widget.documents[currentIndex].filename}...'),
-                ),
-              );
-            },
-            icon: const Icon(Icons.download_rounded, size: 16),
-            label: const Text('Download File'),
-            style: FilledButton.styleFrom(
-              backgroundColor: colors.accent,
-            ),
-          ),
         ],
       ),
     );
@@ -1757,18 +1741,8 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
           ),
           const SizedBox(height: 6),
           Text(
-            '${doc.filename} • You can download the file to inspect its contents.',
+            '${doc.filename} • Read-only preview mode.',
             style: TextStyle(fontSize: 12, color: colors.secondaryText),
-          ),
-          const SizedBox(height: 20),
-          OutlinedButton.icon(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Downloading ${doc.filename}...')),
-              );
-            },
-            icon: const Icon(Icons.download_rounded, size: 16),
-            label: const Text('Download File'),
           ),
         ],
       ),

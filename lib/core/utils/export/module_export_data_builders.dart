@@ -83,10 +83,10 @@ class AccountsExportData {
     }).toList();
 
     return ExportDocument(
-      filenamePrefix: ExportFilenameService.accountsPrefix,
-      reportName: 'Accounts Report',
+      filenamePrefix: ExportFilenameService.stallHolderAccountsPrefix,
+      reportName: 'Stall Holder Accounts Report',
       header: ReportHeader(
-        reportTitle: 'Accounts Report',
+        reportTitle: 'Stall Holder Accounts Report',
         exportDate: now,
         activeFilters: activeFilters,
       ),
@@ -167,10 +167,10 @@ class AccountsExportData {
     }).toList();
 
     return ExportDocument(
-      filenamePrefix: ExportFilenameService.accountsPrefix,
-      reportName: 'Accounts Report',
+      filenamePrefix: ExportFilenameService.customerAccountsPrefix,
+      reportName: 'Customer Accounts Report',
       header: ReportHeader(
-        reportTitle: 'Accounts Report',
+        reportTitle: 'Customer Accounts Report',
         exportDate: now,
         activeFilters: activeFilters,
       ),
@@ -419,9 +419,25 @@ class ComplaintExportData {
     required List<Report> allReports,
     required List<Report> filteredReports,
     required String activeFilters,
+    String? accountType,
     DateTime? exportDate,
   }) {
     final now = exportDate ?? DateTime.now();
+    final audience = switch (accountType) {
+      'Stall Holders' => 'Stall Holder',
+      'Customers' => 'Customer',
+      _ => null,
+    };
+    final reportTitle = audience == null
+        ? 'Complaints Report'
+        : '$audience Complaints Report';
+    final reportName =
+        audience == null ? 'Complaints Report' : '$audience Complaints';
+    final filenamePrefix = switch (audience) {
+      'Stall Holder' => ExportFilenameService.stallHolderComplaintsPrefix,
+      'Customer' => ExportFilenameService.customerComplaintsPrefix,
+      _ => ExportFilenameService.complaintsPrefix,
+    };
 
     final pendingCount =
         allReports.where((r) => r.status == ReportStatus.pending).length;
@@ -467,7 +483,7 @@ class ComplaintExportData {
       const ReportColumn(label: 'Type', flex: 1.0),
       const ReportColumn(label: 'Account / Issue', flex: 1.5),
       const ReportColumn(label: 'Submitted By', flex: 1.4),
-      const ReportColumn(label: 'Reason', flex: 1.6),
+      const ReportColumn(label: 'Violation Type', flex: 1.6),
       const ReportColumn(label: 'Category', flex: 1.0),
       const ReportColumn(label: 'Date', flex: 1.2),
       const ReportColumn(label: 'Status', flex: 1.1),
@@ -512,10 +528,10 @@ class ComplaintExportData {
     }).toList();
 
     return ExportDocument(
-      filenamePrefix: ExportFilenameService.complaintsPrefix,
-      reportName: 'Complaints Report',
+      filenamePrefix: filenamePrefix,
+      reportName: reportName,
       header: ReportHeader(
-        reportTitle: 'Complaints Report',
+        reportTitle: reportTitle,
         exportDate: now,
         activeFilters: activeFilters,
       ),
@@ -532,9 +548,26 @@ class AnnouncementExportData {
     required List<Announcement> allAnnouncements,
     required List<Announcement> filteredAnnouncements,
     required String activeFilters,
+    String? audience,
     DateTime? exportDate,
   }) {
     final now = exportDate ?? DateTime.now();
+    final audienceLabel = switch (audience) {
+      'Stall Holders' => 'Stall Holder',
+      'Customers' => 'Customer',
+      _ => null,
+    };
+    final reportTitle = audienceLabel == null
+        ? 'Announcement History Report'
+        : '$audienceLabel Announcement History Report';
+    final reportName = audienceLabel == null
+        ? 'Announcement History Report'
+        : '$audienceLabel Announcements';
+    final filenamePrefix = switch (audienceLabel) {
+      'Stall Holder' => ExportFilenameService.stallHolderAnnouncementsPrefix,
+      'Customer' => ExportFilenameService.customerAnnouncementsPrefix,
+      _ => ExportFilenameService.announcementsPrefix,
+    };
 
     final totalCount = allAnnouncements.length;
     final deliveredNotices = allAnnouncements.fold<int>(
@@ -611,10 +644,10 @@ class AnnouncementExportData {
     }).toList();
 
     return ExportDocument(
-      filenamePrefix: ExportFilenameService.announcementsPrefix,
-      reportName: 'Announcement History Report',
+      filenamePrefix: filenamePrefix,
+      reportName: reportName,
       header: ReportHeader(
-        reportTitle: 'Announcement History Report',
+        reportTitle: reportTitle,
         exportDate: now,
         activeFilters: activeFilters,
       ),

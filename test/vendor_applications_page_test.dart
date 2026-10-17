@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:palengkego_admin/core/theme/app_theme.dart';
 import 'package:palengkego_admin/core/theme/theme_controller.dart';
 import 'package:palengkego_admin/data/mock_data.dart';
+import 'package:palengkego_admin/data/repositories/mock_repository.dart';
 import 'package:palengkego_admin/features/vendor_applications/application_utils.dart';
 import 'package:palengkego_admin/features/vendor_applications/vendor_applications_page.dart';
 import 'package:palengkego_admin/features/vendor_applications/verification_dialog.dart';
@@ -77,7 +78,11 @@ void main() {
       preferences = await SharedPreferences.getInstance();
     });
 
-    Widget buildTestableDialog(VendorApplication application) {
+    Widget buildTestableDialog(WidgetTester tester, VendorApplication application) {
+      tester.view.physicalSize = const Size(1920, 1080);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
       return ProviderScope(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(preferences),
@@ -104,7 +109,7 @@ void main() {
         documents: const [],
       );
 
-      await tester.pumpWidget(buildTestableDialog(reviewingApp));
+      await tester.pumpWidget(buildTestableDialog(tester, reviewingApp));
       await tester.pumpAndSettle();
 
       expect(find.text('Approve'), findsOneWidget);
@@ -127,7 +132,7 @@ void main() {
         documents: const [],
       );
 
-      await tester.pumpWidget(buildTestableDialog(verifiedApp));
+      await tester.pumpWidget(buildTestableDialog(tester, verifiedApp));
       await tester.pumpAndSettle();
 
       expect(find.text('Approve'), findsNothing);
@@ -151,7 +156,7 @@ void main() {
         documents: const [],
       );
 
-      await tester.pumpWidget(buildTestableDialog(rejectedApp));
+      await tester.pumpWidget(buildTestableDialog(tester, rejectedApp));
       await tester.pumpAndSettle();
 
       expect(find.text('Approve'), findsNothing);
@@ -177,7 +182,7 @@ void main() {
         documents: const [],
       );
 
-      await tester.pumpWidget(buildTestableDialog(invalidDocsApp));
+      await tester.pumpWidget(buildTestableDialog(tester, invalidDocsApp));
       await tester.pumpAndSettle();
 
       expect(find.text('Approve'), findsNothing);
@@ -218,8 +223,61 @@ void main() {
       expect(find.text('PENDING APPLICATION'), findsOneWidget);
       expect(find.text('APPROVED APPLICATION'), findsOneWidget);
       expect(find.text('NEW TODAY'), findsOneWidget);
-      expect(find.textContaining('Pending Review'), findsOneWidget);
-      expect(find.textContaining('Application History'), findsOneWidget);
+      expect(find.text('All Applications'), findsAtLeastNWidgets(1));
+      expect(find.text('#APP-92834'), findsOneWidget); // Already approved.
+      expect(find.text('#APP-92839'), findsOneWidget); // Awaiting review.
+      expect(find.text('#APP-92836'), findsOneWidget); // Re-upload requested.
+
+      await tester.tap(find.text('PENDING APPLICATION'));
+      await tester.pumpAndSettle();
+      expect(find.text('#APP-92834'), findsNothing);
+      expect(find.text('#APP-92839'), findsOneWidget);
+
+      await tester.enterText(
+          find.byType(TextField).first, 'no matching applicant');
+      await tester.pumpAndSettle();
+      expect(find.text('No results found'), findsOneWidget);
+      await tester.tap(find.text('TOTAL APPLICATIONS'));
+      await tester.pumpAndSettle();
+      expect(find.text('#APP-92834'), findsOneWidget);
+      expect(find.text('#APP-92839'), findsOneWidget);
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(VendorApplicationsPage)),
+      );
+      final approval =
+          container.read(appDataProvider.notifier).updateApplication(
+                '#APP-92839',
+                ApplicationStatus.verified,
+              );
+      await tester.pump(const Duration(seconds: 1));
+      await approval;
+      await tester.pumpAndSettle();
+
+      expect(find.text('#APP-92839'), findsOneWidget);
+      expect(
+        container
+            .read(appDataProvider)
+            .applications
+            .firstWhere((item) => item.id == '#APP-92839')
+            .status,
+        ApplicationStatus.verified,
+      );
+
+      // Open filter menu and select Pending Review
+      await tester.tap(find.text('All Applications').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Pending Review').last);
+      await tester.pumpAndSettle();
+      expect(find.text('#APP-92839'), findsNothing);
+
+      // Open filter menu and select Verified
+      await tester.tap(find.text('Pending Review').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Verified').last);
+      await tester.pumpAndSettle();
+      expect(find.text('#APP-92839'), findsOneWidget);
+      expect(find.text('#APP-92843'), findsNothing);
     });
   });
 }

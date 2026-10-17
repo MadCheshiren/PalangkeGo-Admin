@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
-import '../../core/theme/theme_extensions.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/admin_widgets.dart';
 import '../../core/widgets/document_viewer_modal.dart';
@@ -16,11 +15,16 @@ import '../../models/app_models.dart';
 
 class VerificationDialog extends ConsumerStatefulWidget {
   const VerificationDialog.application(this.application, {super.key})
-      : renewal = null;
-  const VerificationDialog.renewal(this.renewal, {super.key})
-      : application = null;
+      : renewal = null,
+        isHistory = false;
+  const VerificationDialog.renewal(
+    this.renewal, {
+    super.key,
+    this.isHistory = false,
+  }) : application = null;
   final VendorApplication? application;
   final RenewalRequest? renewal;
+  final bool isHistory;
   String get applicant => application?.applicant ?? renewal!.applicant;
   String get stall => application?.stallName ?? renewal!.stallName;
   String get category => application?.category ?? renewal!.category;
@@ -64,41 +68,37 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
           .updateRenewal(widget.id, RenewalStatus.approved);
     }
     if (mounted) {
-      final latestVendors = ref.read(appDataProvider).vendors;
-      final createdVendor = latestVendors.cast<Vendor?>().firstWhere(
-            (v) =>
-                v?.name.trim().toLowerCase() ==
-                    widget.application?.applicant.trim().toLowerCase() ||
-                v?.id == 'VND-${widget.id.replaceAll(RegExp(r'[^0-9]'), '')}',
-            orElse: () => latestVendors.isNotEmpty ? latestVendors.first : null,
-          );
-
       final messenger = ScaffoldMessenger.of(context);
-      final nav = GoRouter.of(context);
 
       Navigator.pop(context);
 
+      messenger.clearSnackBars();
       if (widget.application != null) {
-        messenger.showSnackBar(
+        final controller = messenger.showSnackBar(
           SnackBar(
             content: Text(
-              'Application approved! Stall allocation (${createdVendor?.location ?? widget.application?.location}) locked.',
+              'Application approved! Stall allocation (${widget.location}) locked.',
             ),
-            duration: const Duration(seconds: 8),
-            action: createdVendor != null
-                ? SnackBarAction(
-                    label: 'View Account',
-                    onPressed: () {
-                      nav.go('/accounts?accountId=${createdVendor.id}&open=1');
-                    },
-                  )
-                : null,
+            duration: const Duration(seconds: 4),
           ),
         );
+        Future.delayed(const Duration(seconds: 4), () {
+          try {
+            controller.close();
+          } catch (_) {}
+        });
       } else {
-        messenger.showSnackBar(
-          const SnackBar(content: Text('Stall renewal approved.')),
+        final controller = messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Stall renewal approved.'),
+            duration: Duration(seconds: 4),
+          ),
         );
+        Future.delayed(const Duration(seconds: 4), () {
+          try {
+            controller.close();
+          } catch (_) {}
+        });
       }
     }
   }
@@ -134,8 +134,9 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
           );
     }
     if (mounted) {
+      final messenger = ScaffoldMessenger.of(context);
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: Text(
             widget.renewal != null
@@ -181,8 +182,9 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
     }
     if (mounted) {
       setState(() => processing = false);
+      final messenger = ScaffoldMessenger.of(context);
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(content: Text('Application reopened for review.')),
       );
     }
@@ -211,16 +213,27 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
         (currentApp?.status == ApplicationStatus.invalidDocs) ||
         (currentRenewal?.status == RenewalStatus.expired);
 
+    final isHistoricalView = widget.isHistory ||
+        (widget.renewal != null &&
+            currentRenewal?.status != RenewalStatus.reviewing);
+
+    final effectiveApproved =
+        isApproved || (widget.isHistory && !isRejected);
+
     return Dialog(
       insetPadding: EdgeInsets.symmetric(
-        horizontal: narrow ? 10 : 55,
-        vertical: narrow ? 10 : 34,
+        horizontal: narrow ? 10 : 40,
+        vertical: narrow ? 10 : 24,
       ),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 970, maxHeight: 720),
+        constraints: BoxConstraints(
+          maxWidth: 1040,
+          maxHeight: MediaQuery.sizeOf(context).height * 0.92,
+        ),
         child: SingleChildScrollView(
           padding: EdgeInsets.all(narrow ? 16 : 28),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
@@ -231,48 +244,124 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                       children: [
                         Text(
                           widget.renewal != null
-                              ? 'RENEWALS  /  RENEWAL REQUEST DETAIL'
+                              ? (isHistoricalView
+                                  ? 'RENEWALS  /  HISTORICAL RENEWAL RECORD'
+                                  : 'RENEWALS  /  RENEWAL REQUEST DETAIL')
                               : 'TENANTS  /  VERIFICATION DETAIL',
                           style: TextStyle(
-                            fontSize: 9,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurface.withValues(alpha: .5),
+                            fontSize: 9.5,
+                            fontWeight: isHistoricalView
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                            letterSpacing: 0.5,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(
+                                    alpha: isHistoricalView ? .75 : .5),
                           ),
                         ),
                         const SizedBox(height: 10),
                         Row(
                           children: [
-                            AvatarCircle(name: widget.applicant, size: 46),
-                            const SizedBox(width: 12),
+                            AvatarCircle(name: widget.applicant, size: 48),
+                            const SizedBox(width: 14),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    widget.applicant,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.w800,
+                                  Row(
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          widget.applicant,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: GoogleFonts.inter(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                      if (isHistoricalView) ...[
+                                        const SizedBox(width: 10),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 3,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .primary
+                                                .withValues(alpha: 0.12),
+                                            borderRadius:
+                                                BorderRadius.circular(6),
+                                            border: Border.all(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .primary
+                                                  .withValues(alpha: 0.3),
+                                            ),
+                                          ),
+                                          child: Text(
+                                            'Archived Record',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w700,
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .primary,
+                                            ),
+                                          ),
+                                        ),
+                                      ] else if (widget.renewal != null) ...[
+                                        const SizedBox(width: 10),
+                                        StatusBadge(
+                                          label: enumLabel(
+                                              currentRenewal?.status ??
+                                                  widget.renewal!.status),
+                                          kind: (currentRenewal?.status ??
+                                                      widget.renewal!.status) ==
+                                                  RenewalStatus.approved
+                                              ? BadgeKind.success
+                                              : (currentRenewal?.status ??
+                                                          widget.renewal!
+                                                              .status) ==
+                                                      RenewalStatus.expired
+                                                  ? BadgeKind.danger
+                                                  : BadgeKind.warning,
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  if (!narrow) ...[
+                                    const SizedBox(height: 4),
+                                    _buildSubtitleWrap(
+                                      context,
+                                      currentApp,
+                                      currentRenewal,
                                     ),
-                                  ),
-                                  Text(
-                                    'Submitted: ${shortDate.format(currentRenewal?.submittedAt ?? currentApp?.submittedAt ?? widget.renewal?.submittedAt ?? widget.application?.submittedAt ?? DateTime.now())}  •  ${widget.location}',
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 10),
-                                  ),
+                                  ],
                                 ],
                               ),
                             ),
                           ],
                         ),
+                        if (narrow) ...[
+                          const SizedBox(height: 8),
+                          _buildSubtitleWrap(
+                            context,
+                            currentApp,
+                            currentRenewal,
+                          ),
+                        ],
                       ],
                     ),
                   ),
                   IconButton(
                     onPressed: () => Navigator.pop(context),
                     icon: const Icon(Icons.close_rounded),
+                    tooltip: 'Close',
                   ),
                 ],
               ),
@@ -287,17 +376,17 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(flex: 68, child: _documents(context)),
-                    const SizedBox(width: 25),
+                    Expanded(flex: 64, child: _documents(context)),
+                    const SizedBox(width: 20),
                     Expanded(
-                        flex: 32,
+                        flex: 36,
                         child: _summary(context, currentApp, currentRenewal)),
                   ],
                 ),
               const SizedBox(height: 22),
               _buildActionSection(
                 context,
-                isApproved: isApproved,
+                isApproved: effectiveApproved,
                 isRejected: isRejected,
                 currentApp: currentApp,
                 currentRenewal: currentRenewal,
@@ -306,6 +395,122 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildSubtitleWrap(
+    BuildContext context,
+    VendorApplication? currentApp,
+    RenewalRequest? currentRenewal,
+  ) {
+    final narrow = MediaQuery.sizeOf(context).width < 600;
+    final submittedDate = currentRenewal?.submittedAt ??
+        currentApp?.submittedAt ??
+        widget.renewal?.submittedAt ??
+        widget.application?.submittedAt ??
+        DateTime.now();
+    final dateText = narrow
+        ? 'Submitted: ${DateFormat('MMM dd, yyyy').format(submittedDate)}'
+        : 'Submitted: ${DateFormat('MMM dd, yyyy, h:mm a').format(submittedDate)}';
+    // This dialog serves both application and renewal review records.
+    final idLabel =
+        widget.application == null ? 'Renewal ID' : 'Application ID';
+
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 10,
+      runSpacing: 4,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.assignment_outlined,
+              size: 13,
+              color: semanticColors(context).mutedText,
+            ),
+            const SizedBox(width: 4),
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: narrow ? 230 : double.infinity,
+              ),
+              child: Text(
+                '$idLabel: #${widget.id.replaceFirst(RegExp(r'^#+'), '')}',
+                overflow:
+                    narrow ? TextOverflow.ellipsis : TextOverflow.visible,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: semanticColors(context).mutedText,
+                ),
+              ),
+            ),
+          ],
+        ),
+        Text(
+          '•',
+          style: TextStyle(
+            fontSize: 11,
+            color: semanticColors(context).mutedText,
+          ),
+        ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.store_outlined,
+              size: 13,
+              color: semanticColors(context).mutedText,
+            ),
+            const SizedBox(width: 4),
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: narrow ? 230 : double.infinity,
+              ),
+              child: Text(
+                widget.location,
+                overflow:
+                    narrow ? TextOverflow.ellipsis : TextOverflow.visible,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: semanticColors(context).mutedText,
+                ),
+              ),
+            ),
+          ],
+        ),
+        Text(
+          '•',
+          style: TextStyle(
+            fontSize: 11,
+            color: semanticColors(context).mutedText,
+          ),
+        ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.calendar_today_outlined,
+              size: 13,
+              color: semanticColors(context).mutedText,
+            ),
+            const SizedBox(width: 4),
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: narrow ? 230 : double.infinity,
+              ),
+              child: Text(
+                dateText,
+                overflow:
+                    narrow ? TextOverflow.ellipsis : TextOverflow.visible,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: semanticColors(context).mutedText,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -327,78 +532,83 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
       final label = widget.renewal != null
           ? 'Approved on $dateStr'
           : 'Verified on $dateStr';
+      final vendor = widget.renewal == null
+          ? null
+          : ref.watch(appDataProvider).vendors.cast<Vendor?>().firstWhere(
+                (v) =>
+                    v?.name.trim().toLowerCase() ==
+                        widget.applicant.trim().toLowerCase() ||
+                    v?.id ==
+                        'VND-${widget.id.replaceAll(RegExp(r'[^0-9]'), '')}',
+                orElse: () => null,
+              );
+      final targetVendorId = vendor?.id ??
+          'VND-${widget.id.replaceAll(RegExp(r'[^0-9]'), '')}';
 
-      final latestVendors = ref.watch(appDataProvider).vendors;
-      final vendor = latestVendors.cast<Vendor?>().firstWhere(
-            (v) =>
-                v?.name.trim().toLowerCase() ==
-                    widget.applicant.trim().toLowerCase() ||
-                v?.id == 'VND-${widget.id.replaceAll(RegExp(r'[^0-9]'), '')}',
-            orElse: () => null,
-          );
-      final targetVendorId =
-          vendor?.id ?? 'VND-${widget.id.replaceAll(RegExp(r'[^0-9]'), '')}';
-
-      return Wrap(
-        spacing: 12,
-        runSpacing: 8,
-        alignment: WrapAlignment.spaceBetween,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: const Color(0xFF10B981).withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: const Color(0xFF10B981).withValues(alpha: 0.3),
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.check_circle_rounded,
-                  size: 18,
-                  color: Color(0xFF059669),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  label,
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF059669),
-                  ),
-                ),
-              ],
-            ),
+      final statusMessage = Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFF10B981).withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: const Color(0xFF10B981).withValues(alpha: 0.3),
           ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              FilledButton.icon(
-                onPressed: () {
-                  Navigator.pop(context);
-                  context.go('/accounts?accountId=$targetVendorId&open=1');
-                },
-                icon: const Icon(Icons.person_outline_rounded, size: 16),
-                label: const Text('View Account Profile'),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.check_circle_rounded,
+              size: 18,
+              color: Color(0xFF059669),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF059669),
               ),
-              const SizedBox(width: 10),
-              OutlinedButton.icon(
-                onPressed: processing ? null : _reopenForReview,
-                icon: const Icon(Icons.refresh_rounded, size: 16),
-                label: const Text('Reopen for Review'),
-                style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: semanticColors(context).subtleBorder),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-              ),
-            ],
+            ),
+          ],
+        ),
+      );
+      final actions = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (widget.renewal != null) ...[
+            FilledButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                context.go('/accounts?accountId=$targetVendorId&open=1');
+              },
+              icon: const Icon(Icons.person_outline_rounded, size: 16),
+              label: const Text('View Account Profile'),
+            ),
+            const SizedBox(width: 10),
+          ],
+          OutlinedButton.icon(
+            onPressed: processing ? null : _reopenForReview,
+            icon: const Icon(Icons.refresh_rounded, size: 16),
+            label: const Text('Reopen for Review'),
+            style: OutlinedButton.styleFrom(
+              side: BorderSide(color: semanticColors(context).subtleBorder),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
           ),
         ],
+      );
+      return LayoutBuilder(
+        builder: (context, constraints) => constraints.maxWidth < 1100
+            ? Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                children: [statusMessage, actions],
+              )
+            : Row(
+                children: [Expanded(child: statusMessage), const SizedBox(width: 16), actions],
+              ),
       );
     }
 
@@ -552,10 +762,39 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
               child: Text(
                 'Required Documents (${documents.length} of 5 Required Uploads)',
                 style: GoogleFonts.inter(
-                  fontSize: 15,
+                  fontSize: 14.5,
                   fontWeight: FontWeight.bold,
                   color: semanticColors(context).primaryText,
                 ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.25),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.check_circle_rounded,
+                    size: 12,
+                    color: Color(0xFF10B981),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${documents.length}/5 Completed',
+                    style: GoogleFonts.inter(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF10B981),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -567,9 +806,13 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
               : MediaQuery.sizeOf(context).width < 700
                   ? 2
                   : 3,
-          crossAxisSpacing: 14,
-          mainAxisSpacing: 14,
-          childAspectRatio: MediaQuery.sizeOf(context).width < 500 ? 1.6 : 1.15,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: MediaQuery.sizeOf(context).width < 500
+              ? 1.75
+              : MediaQuery.sizeOf(context).width < 700
+                  ? 1.3
+                  : 1.05,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           children: tiles,
@@ -584,7 +827,6 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
     int index,
     List<KycDocument> allDocuments,
   ) {
-    final asset = document.assetPath;
     final ext = document.filename.split('.').last.toLowerCase();
     final isPdf = ext == 'pdf' || document.mimeType.contains('pdf');
     final isWord =
@@ -593,9 +835,8 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
     return _doc(
       context,
       name: document.name,
-      asset: asset,
-      filename:
-          '${document.filename} • ${shortDate.format(document.uploadedAt)}',
+      filename: document.filename,
+      uploadedAt: document.uploadedAt,
       isPdf: isPdf,
       isWord: isWord,
       onTap: () {
@@ -615,105 +856,131 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
   Widget _doc(
     BuildContext context, {
     required String name,
-    required String? asset,
     required String filename,
+    required DateTime uploadedAt,
     required bool isPdf,
     required bool isWord,
     required VoidCallback onTap,
   }) {
     final colors = semanticColors(context);
 
-    final Widget content;
-    if (asset != null) {
-      content = Image.asset(
-        asset,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) =>
-            _docPlaceholderIcon(colors, isPdf, isWord),
-      );
-    } else {
-      content = _docPlaceholderIcon(colors, isPdf, isWord);
-    }
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        decoration: BoxDecoration(
-          color: colors.cardBackground,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: colors.subtleBorder, width: 1.2),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: ClipRRect(
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(11)),
-                child: content,
-              ),
-            ),
-            Tooltip(
-              message: '$name\n$filename',
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  border: Border(
-                    top: BorderSide(color: colors.subtleBorder, width: 0.8),
-                  ),
-                ),
-                child: Text(
-                  '$name\n$filename',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
-                    color: colors.primaryText,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _docPlaceholderIcon(
-      AppSemanticColors colors, bool isPdf, bool isWord) {
     final iconData = isPdf
         ? Icons.picture_as_pdf_rounded
         : isWord
             ? Icons.description_rounded
-            : Icons.description_outlined;
+            : Icons.image_rounded;
     final iconColor = isPdf
         ? const Color(0xFFEF4444)
         : isWord
             ? const Color(0xFF2563EB)
-            : colors.accent;
+            : const Color(0xFF10B981);
+    final iconBg = iconColor.withValues(alpha: 0.12);
 
-    return Center(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: iconColor.withValues(alpha: 0.1),
-          shape: BoxShape.circle,
-        ),
-        child: Icon(
-          iconData,
-          size: 38,
-          color: iconColor,
-        ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: colors.cardBackground,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colors.subtleBorder, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: iconBg,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Icon(
+                  iconData,
+                  size: 16,
+                  color: iconColor,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.all(2.5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.check_circle_rounded,
+                  size: 15,
+                  color: Color(0xFF10B981),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: colors.primaryText,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  filename,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 9.5,
+                    color: colors.mutedText,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  'Uploaded on ${shortDate.format(uploadedAt)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 8.5,
+                    color: colors.mutedText,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          OutlinedButton.icon(
+            onPressed: onTap,
+            icon: const Icon(Icons.visibility_outlined, size: 13),
+            label: const Text('View Document'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(28),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              side: BorderSide(color: colors.subtleBorder),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6),
+              ),
+              textStyle: GoogleFonts.inter(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -757,26 +1024,66 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                 ),
               ),
               const SizedBox(height: 14),
-              _item('BUSINESS NAME', widget.stall),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 13),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('CATEGORY', style: TextStyle(fontSize: 8.5)),
-                    const SizedBox(height: 5),
-                    CategoryBadge(category: widget.category),
-                  ],
-                ),
+              _summaryField(
+                context,
+                icon: Icons.storefront_outlined,
+                label: 'BUSINESS NAME',
+                value: widget.stall,
               ),
-              _item('CONTACT NO.', '+63 921 555 0123'),
-              _item(
-                'EMAIL ADDRESS',
-                '${widget.applicant.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '.')}@gmail.com',
+              _summaryCategoryField(
+                context,
+                icon: Icons.category_outlined,
+                label: 'STALL CATEGORY',
+                category: widget.category,
               ),
-              if (app?.status == ApplicationStatus.verified ||
-                  renewal?.status == RenewalStatus.approved) ...[
-                const SizedBox(height: 6),
+              _summaryField(
+                context,
+                icon: Icons.phone_outlined,
+                label: 'CONTACT NUMBER',
+                value: () {
+                  final latestVendors = ref.watch(appDataProvider).vendors;
+                  final vendor = latestVendors.cast<Vendor?>().firstWhere(
+                        (v) =>
+                            v?.id ==
+                                'VND-${widget.id.replaceAll(RegExp(r'[^0-9]'), '')}' ||
+                            v?.name.trim().toLowerCase() ==
+                                widget.applicant.trim().toLowerCase(),
+                        orElse: () => null,
+                      );
+                  if (vendor != null && vendor.phone.isNotEmpty) {
+                    return vendor.phone;
+                  }
+                  final idNum = int.tryParse(
+                    widget.id.replaceAll(RegExp(r'[^0-9]'), ''),
+                  );
+                  if (idNum != null && idNum >= 92834 && idNum < 92834 + 25) {
+                    return '+63 921 555 ${1000 + (idNum - 92834)}';
+                  }
+                  return '+63 921 555 0123';
+                }(),
+              ),
+              _summaryField(
+                context,
+                icon: Icons.email_outlined,
+                label: 'EMAIL ADDRESS',
+                value: () {
+                  final latestVendors = ref.watch(appDataProvider).vendors;
+                  final vendor = latestVendors.cast<Vendor?>().firstWhere(
+                        (v) =>
+                            v?.id ==
+                                'VND-${widget.id.replaceAll(RegExp(r'[^0-9]'), '')}' ||
+                            v?.name.trim().toLowerCase() ==
+                                widget.applicant.trim().toLowerCase(),
+                        orElse: () => null,
+                      );
+                  if (vendor != null && vendor.email.isNotEmpty) {
+                    return vendor.email;
+                  }
+                  return '${widget.applicant.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '.')}@gmail.com';
+                }(),
+              ),
+              if (renewal != null) ...[
+                const SizedBox(height: 4),
                 OutlinedButton.icon(
                   onPressed: () {
                     final targetId =
@@ -790,6 +1097,10 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                     minimumSize: const Size.fromHeight(36),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
+                    ),
+                    textStyle: GoogleFonts.inter(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -825,6 +1136,81 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
     );
   }
 
+  Widget _summaryField(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    final colors = semanticColors(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 12, color: colors.mutedText),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 8.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                  color: colors.mutedText,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 3),
+          Text(
+            value,
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: colors.primaryText,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryCategoryField(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required String category,
+  }) {
+    final colors = semanticColors(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 12, color: colors.mutedText),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 8.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                  color: colors.mutedText,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          CategoryBadge(category: category),
+        ],
+      ),
+    );
+  }
+
   Widget _buildRenewalHistoryCard(BuildContext context) {
     final colors = semanticColors(context);
     final renewal = widget.renewal!;
@@ -854,18 +1240,21 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 6,
+            runSpacing: 4,
             children: [
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
                     Icons.history_rounded,
-                    size: 14,
+                    size: 13,
                     color: colors.secondaryText,
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 5),
                   Text(
                     'RENEWAL HISTORY',
                     style: GoogleFonts.inter(
@@ -877,21 +1266,56 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                   ),
                 ],
               ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF10B981).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  'Good Standing',
-                  style: GoogleFonts.inter(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF10B981),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      'Good Standing',
+                      style: GoogleFonts.inter(
+                        fontSize: 8.5,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF10B981),
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 4),
+                  InkWell(
+                    onTap: () => _showAllRenewalHistoryModal(
+                      context,
+                      renewal: renewal,
+                      matchingRenewals: matchingRenewals,
+                    ),
+                    borderRadius: BorderRadius.circular(4),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'View All',
+                            style: GoogleFonts.inter(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              color: colors.accent,
+                            ),
+                          ),
+                          Icon(
+                            Icons.chevron_right_rounded,
+                            size: 12,
+                            color: colors.accent,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -909,6 +1333,22 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                     ? BadgeKind.danger
                     : BadgeKind.warning,
             isCurrent: true,
+            onTap: () => _showCycleDetailDialog(
+              context,
+              cycle: '${renewal.expiryDate.year} Renewal (Current)',
+              dateStr: renewal.submittedAt != null
+                  ? 'Submitted ${shortDate.format(renewal.submittedAt!)}'
+                  : 'Submitted recently',
+              statusLabel: enumLabel(renewal.status),
+              statusKind: renewal.status == RenewalStatus.approved
+                  ? BadgeKind.success
+                  : renewal.status == RenewalStatus.expired
+                      ? BadgeKind.danger
+                      : BadgeKind.warning,
+              docs: renewal.documents.isNotEmpty
+                  ? renewal.documents
+                  : seedKycDocuments(renewal.submittedAt ?? DateTime.now()),
+            ),
           ),
           if (matchingRenewals.isNotEmpty)
             for (int i = 0; i < matchingRenewals.length; i++)
@@ -926,6 +1366,22 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                         : BadgeKind.neutral,
                 isCurrent: false,
                 isLast: i == matchingRenewals.length - 1,
+                onTap: () => _showCycleDetailDialog(
+                  context,
+                  cycle: '${matchingRenewals[i].expiryDate.year} Annual License',
+                  dateStr: matchingRenewals[i].submittedAt != null
+                      ? 'Submitted ${shortDate.format(matchingRenewals[i].submittedAt!)}'
+                      : 'Valid until ${shortDate.format(matchingRenewals[i].expiryDate)}',
+                  statusLabel: enumLabel(matchingRenewals[i].status),
+                  statusKind: matchingRenewals[i].status == RenewalStatus.approved
+                      ? BadgeKind.success
+                      : matchingRenewals[i].status == RenewalStatus.expired
+                          ? BadgeKind.danger
+                          : BadgeKind.neutral,
+                  docs: matchingRenewals[i].documents.isNotEmpty
+                      ? matchingRenewals[i].documents
+                      : seedKycDocuments(matchingRenewals[i].submittedAt ?? matchingRenewals[i].expiryDate),
+                ),
               )
           else ...[
             _historyItem(
@@ -935,6 +1391,14 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
               statusLabel: 'Approved',
               statusKind: BadgeKind.success,
               isCurrent: false,
+              onTap: () => _showCycleDetailDialog(
+                context,
+                cycle: '${renewal.expiryDate.year - 1} Annual License',
+                dateStr: 'Approved on Oct 14, ${renewal.expiryDate.year - 1}',
+                statusLabel: 'Approved',
+                statusKind: BadgeKind.success,
+                docs: seedKycDocuments(DateTime(renewal.expiryDate.year - 1, 10, 14)),
+              ),
             ),
             _historyItem(
               context,
@@ -943,6 +1407,14 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
               statusLabel: 'Approved',
               statusKind: BadgeKind.success,
               isCurrent: false,
+              onTap: () => _showCycleDetailDialog(
+                context,
+                cycle: '${renewal.expiryDate.year - 2} Annual License',
+                dateStr: 'Approved on Oct 08, ${renewal.expiryDate.year - 2}',
+                statusLabel: 'Approved',
+                statusKind: BadgeKind.success,
+                docs: seedKycDocuments(DateTime(renewal.expiryDate.year - 2, 10, 8)),
+              ),
             ),
             _historyItem(
               context,
@@ -952,6 +1424,14 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
               statusKind: BadgeKind.neutral,
               isCurrent: false,
               isLast: true,
+              onTap: () => _showCycleDetailDialog(
+                context,
+                cycle: 'Initial Stall Grant',
+                dateStr: 'Verified on Oct 12, 2023',
+                statusLabel: 'Verified',
+                statusKind: BadgeKind.neutral,
+                docs: seedKycDocuments(DateTime(2023, 10, 12)),
+              ),
             ),
           ],
         ],
@@ -967,6 +1447,7 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
     required BadgeKind statusKind,
     required bool isCurrent,
     bool isLast = false,
+    VoidCallback? onTap,
   }) {
     final colors = semanticColors(context);
     final dotColor = isCurrent
@@ -975,7 +1456,7 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
             ? const Color(0xFF10B981)
             : colors.mutedText;
 
-    return Row(
+    final content = Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Column(
@@ -1007,31 +1488,500 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      cycle,
-                      style: GoogleFonts.inter(
-                        fontSize: 10,
-                        fontWeight:
-                            isCurrent ? FontWeight.w800 : FontWeight.w600,
-                        color: colors.primaryText,
+                    Expanded(
+                      child: Text(
+                        cycle,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          fontWeight:
+                              isCurrent ? FontWeight.w800 : FontWeight.w600,
+                          color: colors.primaryText,
+                        ),
                       ),
                     ),
+                    const SizedBox(width: 4),
                     StatusBadge(label: statusLabel, kind: statusKind),
                   ],
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  dateStr,
-                  style: GoogleFonts.inter(
-                    fontSize: 8.5,
-                    color: colors.mutedText,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        dateStr,
+                        style: GoogleFonts.inter(
+                          fontSize: 8.5,
+                          color: colors.mutedText,
+                        ),
+                      ),
+                    ),
+                    if (onTap != null)
+                      Text(
+                        'View Docs >',
+                        style: GoogleFonts.inter(
+                          fontSize: 8.5,
+                          fontWeight: FontWeight.w600,
+                          color: colors.accent,
+                        ),
+                      ),
+                  ],
                 ),
               ],
             ),
           ),
         ),
       ],
+    );
+
+    if (onTap != null) {
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
+          child: content,
+        ),
+      );
+    }
+    return content;
+  }
+
+  void _showCycleDetailDialog(
+    BuildContext context, {
+    required String cycle,
+    required String dateStr,
+    required String statusLabel,
+    required BadgeKind statusKind,
+    required List<KycDocument> docs,
+  }) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        final colors = semanticColors(ctx);
+        final narrow = MediaQuery.sizeOf(ctx).width < 600;
+
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 680),
+            child: Padding(
+              padding: EdgeInsets.all(narrow ? 16 : 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  cycle,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w800,
+                                    color: colors.primaryText,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                StatusBadge(label: statusLabel, kind: statusKind),
+                              ],
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              '${widget.applicant} • ${widget.stall} • $dateStr',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: colors.mutedText,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        icon: const Icon(Icons.close_rounded),
+                        tooltip: 'Close',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  const Divider(),
+                  const SizedBox(height: 14),
+                  Text(
+                    'Archived Cycle Documents (${docs.length} Uploads)',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: colors.primaryText,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 340),
+                    child: SingleChildScrollView(
+                      child: GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: narrow ? 1 : 2,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 10,
+                          childAspectRatio: 2.4,
+                        ),
+                        itemCount: docs.length,
+                        itemBuilder: (context, idx) {
+                          final doc = docs[idx];
+                          final isPdf = doc.filename.toLowerCase().endsWith('.pdf');
+                          final isWord = doc.filename.toLowerCase().endsWith('.docx') ||
+                              doc.filename.toLowerCase().endsWith('.doc');
+
+                          return InkWell(
+                            onTap: () {
+                              showDialog<void>(
+                                context: context,
+                                builder: (_) => DocumentViewerModal(
+                                  documents: docs,
+                                  initialIndex: idx,
+                                  applicantName: widget.applicant,
+                                  stallName: widget.stall,
+                                ),
+                              );
+                            },
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: colors.inputSurface,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: colors.subtleBorder),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 36,
+                                    height: 36,
+                                    decoration: BoxDecoration(
+                                      color: isPdf
+                                          ? const Color(0xFFEF4444).withValues(alpha: 0.12)
+                                          : isWord
+                                              ? const Color(0xFF3B82F6).withValues(alpha: 0.12)
+                                              : const Color(0xFF10B981).withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Icon(
+                                      isPdf
+                                          ? Icons.picture_as_pdf_rounded
+                                          : isWord
+                                              ? Icons.description_rounded
+                                              : Icons.image_rounded,
+                                      size: 18,
+                                      color: isPdf
+                                          ? const Color(0xFFEF4444)
+                                          : isWord
+                                              ? const Color(0xFF3B82F6)
+                                              : const Color(0xFF10B981),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          doc.name,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: GoogleFonts.inter(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: colors.primaryText,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          doc.filename,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 9.5,
+                                            color: colors.mutedText,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Icon(
+                                    Icons.visibility_outlined,
+                                    size: 16,
+                                    color: colors.mutedText,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      ),
+                      child: const Text('Close'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showAllRenewalHistoryModal(
+    BuildContext context, {
+    required RenewalRequest renewal,
+    required List<RenewalRequest> matchingRenewals,
+  }) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        final colors = semanticColors(ctx);
+        final narrow = MediaQuery.sizeOf(ctx).width < 640;
+
+        final records = <Map<String, dynamic>>[
+          {
+            'cycle': '${renewal.expiryDate.year} Renewal (Current)',
+            'dateStr': renewal.submittedAt != null
+                ? 'Submitted ${shortDate.format(renewal.submittedAt!)}'
+                : 'Submitted recently',
+            'statusLabel': enumLabel(renewal.status),
+            'statusKind': renewal.status == RenewalStatus.approved
+                ? BadgeKind.success
+                : renewal.status == RenewalStatus.expired
+                    ? BadgeKind.danger
+                    : BadgeKind.warning,
+            'isCurrent': true,
+            'docs': renewal.documents.isNotEmpty
+                ? renewal.documents
+                : seedKycDocuments(renewal.submittedAt ?? DateTime.now()),
+          },
+          if (matchingRenewals.isNotEmpty)
+            for (final r in matchingRenewals)
+              {
+                'cycle': '${r.expiryDate.year} Annual License',
+                'dateStr': r.submittedAt != null
+                    ? 'Submitted ${shortDate.format(r.submittedAt!)}'
+                    : 'Valid until ${shortDate.format(r.expiryDate)}',
+                'statusLabel': enumLabel(r.status),
+                'statusKind': r.status == RenewalStatus.approved
+                    ? BadgeKind.success
+                    : r.status == RenewalStatus.expired
+                        ? BadgeKind.danger
+                        : BadgeKind.neutral,
+                'isCurrent': false,
+                'docs': r.documents.isNotEmpty
+                    ? r.documents
+                    : seedKycDocuments(r.submittedAt ?? r.expiryDate),
+              }
+          else ...[
+            {
+              'cycle': '${renewal.expiryDate.year - 1} Annual License',
+              'dateStr': 'Approved on Oct 14, ${renewal.expiryDate.year - 1}',
+              'statusLabel': 'Approved',
+              'statusKind': BadgeKind.success,
+              'isCurrent': false,
+              'docs': seedKycDocuments(DateTime(renewal.expiryDate.year - 1, 10, 14)),
+            },
+            {
+              'cycle': '${renewal.expiryDate.year - 2} Annual License',
+              'dateStr': 'Approved on Oct 08, ${renewal.expiryDate.year - 2}',
+              'statusLabel': 'Approved',
+              'statusKind': BadgeKind.success,
+              'isCurrent': false,
+              'docs': seedKycDocuments(DateTime(renewal.expiryDate.year - 2, 10, 8)),
+            },
+            {
+              'cycle': 'Initial Stall Grant',
+              'dateStr': 'Verified on Oct 12, 2023',
+              'statusLabel': 'Verified',
+              'statusKind': BadgeKind.neutral,
+              'isCurrent': false,
+              'docs': seedKycDocuments(DateTime(2023, 10, 12)),
+            },
+          ],
+        ];
+
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720, maxHeight: 600),
+            child: Padding(
+              padding: EdgeInsets.all(narrow ? 16 : 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.history_rounded, size: 20, color: colors.accent),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Complete Renewal History',
+                            style: GoogleFonts.inter(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: colors.primaryText,
+                            ),
+                          ),
+                        ],
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        icon: const Icon(Icons.close_rounded),
+                        tooltip: 'Close',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'All historical cycles, licenses, and inspection records for ${widget.applicant} (${widget.stall}).',
+                    style: TextStyle(fontSize: 12, color: colors.mutedText),
+                  ),
+                  const SizedBox(height: 14),
+                  const Divider(),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: ListView.separated(
+                      itemCount: records.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (context, idx) {
+                        final rec = records[idx];
+                        final List<KycDocument> docs = rec['docs'] as List<KycDocument>;
+
+                        return Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: colors.inputSurface,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: rec['isCurrent'] == true
+                                  ? const Color(0xFF3B82F6).withValues(alpha: 0.5)
+                                  : colors.subtleBorder,
+                              width: rec['isCurrent'] == true ? 1.5 : 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 34,
+                                height: 34,
+                                decoration: BoxDecoration(
+                                  color: rec['isCurrent'] == true
+                                      ? const Color(0xFF3B82F6).withValues(alpha: 0.12)
+                                      : colors.cardBackground,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  rec['isCurrent'] == true
+                                      ? Icons.update_rounded
+                                      : Icons.verified_outlined,
+                                  size: 18,
+                                  color: rec['isCurrent'] == true
+                                      ? const Color(0xFF3B82F6)
+                                      : colors.secondaryText,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text(
+                                          rec['cycle'] as String,
+                                          style: GoogleFonts.inter(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700,
+                                            color: colors.primaryText,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        StatusBadge(
+                                          label: rec['statusLabel'] as String,
+                                          kind: rec['statusKind'] as BadgeKind,
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      '${rec['dateStr']} • ${docs.length} uploaded document(s)',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: colors.mutedText,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              OutlinedButton.icon(
+                                onPressed: () {
+                                  _showCycleDetailDialog(
+                                    context,
+                                    cycle: rec['cycle'] as String,
+                                    dateStr: rec['dateStr'] as String,
+                                    statusLabel: rec['statusLabel'] as String,
+                                    statusKind: rec['statusKind'] as BadgeKind,
+                                    docs: docs,
+                                  );
+                                },
+                                icon: const Icon(Icons.folder_open_rounded, size: 14),
+                                label: const Text('View Documents', style: TextStyle(fontSize: 11)),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                      ),
+                      child: const Text('Close'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -1077,7 +2027,10 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
             message:
                 'Requested document update from ${widget.applicant}: "$value"',
             type: NotificationType.vendorApplication,
-            route: '/applications',
+            target: NotificationTarget(
+              type: NotificationTargetType.application,
+              id: widget.id,
+            ),
             actionLabel: 'View Status',
           );
     }
@@ -1090,13 +2043,17 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
             message:
                 'Requested document update from ${widget.applicant}: "$value"',
             type: NotificationType.renewal,
-            route: '/renewals',
+            target: NotificationTarget(
+              type: NotificationTargetType.renewal,
+              id: widget.id,
+            ),
             actionLabel: 'View Status',
           );
     }
     if (mounted) {
+      final messenger = ScaffoldMessenger.of(context);
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: Text(
             'Additional documents requested from ${widget.applicant}.',

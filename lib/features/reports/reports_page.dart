@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:go_router/go_router.dart';
-
-import '../../core/theme/theme_controller.dart';
-import '../../core/utils/csv_exporter.dart';
+import '../../core/theme/theme_extensions.dart';
+import '../../core/utils/export/admin_export_service.dart';
+import '../../core/utils/export/module_export_data_builders.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/admin_shell.dart';
 import '../../core/widgets/admin_widgets.dart';
@@ -11,65 +13,70 @@ import '../../data/repositories/mock_repository.dart';
 import '../../models/app_models.dart';
 
 class ReportsPage extends ConsumerStatefulWidget {
-  const ReportsPage({super.key});
+  const ReportsPage({
+    super.key,
+    this.selectedReportId,
+    this.openDetailsOnLoad = false,
+  });
+
+  final String? selectedReportId;
+  final bool openDetailsOnLoad;
+
   @override
   ConsumerState<ReportsPage> createState() => _ReportsPageState();
 }
 
 class _ReportsPageState extends ConsumerState<ReportsPage> {
-  static const _viewedReportsPreference = 'reports_viewed_new_badges';
   final search = TextEditingController();
   final tableScrollController = ScrollController();
   String status = 'All Statuses';
   String stallCategory = 'All Categories';
   String targetType = 'All Types';
+  String dateOrder = 'Newest to Oldest';
   bool history = false;
   int page = 0;
-  late Set<String> _viewedReportIds;
-
-  @override
-  void initState() {
-    super.initState();
-    _viewedReportIds = ref
-            .read(sharedPreferencesProvider)
-            .getStringList(_viewedReportsPreference)
-            ?.toSet() ??
-        <String>{};
-  }
-
-  void _markReportViewed(String id) {
-    if (!_viewedReportIds.add(id)) return;
-    setState(() {});
-    ref.read(sharedPreferencesProvider).setStringList(
-          _viewedReportsPreference,
-          _viewedReportIds.toList(),
-        );
-  }
-
-  String? _newestReportId(List<Report> values) {
-    final pending =
-        values.where((item) => item.status == ReportStatus.pending).toList();
-    if (pending.isEmpty) {
-      final active =
-          values.where((item) => item.status != ReportStatus.resolved).toList();
-      if (active.isEmpty) return null;
-      var newest = active.first;
-      for (final item in active.skip(1)) {
-        if (item.date.isAfter(newest.date)) newest = item;
-      }
-      return newest.id;
-    }
-    var newest = pending.first;
-    for (final item in pending.skip(1)) {
-      if (item.date.isAfter(newest.date)) newest = item;
-    }
-    return newest.id;
-  }
-
+  bool _selectedReportOpened = false;
   bool _isStallHolderReport(Report item) =>
       item.type == 'Stall Holder' || item.type == 'Vendor';
 
   bool _isCustomerReport(Report item) => item.type == 'Customer';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _openSelectedReport());
+  }
+
+  @override
+  void didUpdateWidget(covariant ReportsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selectedReportId != oldWidget.selectedReportId ||
+        widget.openDetailsOnLoad != oldWidget.openDetailsOnLoad) {
+      _selectedReportOpened = false;
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _openSelectedReport(),
+      );
+    }
+  }
+
+  Future<void> _openSelectedReport() async {
+    if (!mounted ||
+        _selectedReportOpened ||
+        !widget.openDetailsOnLoad ||
+        widget.selectedReportId == null) {
+      return;
+    }
+    Report? selected;
+    for (final item in ref.read(appDataProvider).reports) {
+      if (item.id == widget.selectedReportId) {
+        selected = item;
+        break;
+      }
+    }
+    if (selected == null) return;
+    _selectedReportOpened = true;
+    await _openReport(selected);
+  }
 
   @override
   void dispose() {
@@ -98,6 +105,25 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
         );
       }
     });
+  }
+
+  Future<void> _openReport(Report report) async {
+    if (report.status == ReportStatus.pending) {
+      await ref.read(appDataProvider.notifier).updateReport(
+            report.id,
+            ReportStatus.underReview,
+            'Review started by administrator.',
+          );
+    }
+    if (!mounted) return;
+    final current = ref
+        .read(appDataProvider)
+        .reports
+        .firstWhere((item) => item.id == report.id, orElse: () => report);
+    showBlurredDialog(
+      context,
+      (context) => ReportReviewDialog(report: current),
+    );
   }
 
   @override
@@ -136,35 +162,13 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
                   (item.category ?? 'FRUITS') == selectedCategory),
         )
         .toList()
-      ..sort((a, b) => b.date.compareTo(a.date));
-    final now = DateTime.now();
-    final todayReports = reports.where(
-      (item) =>
-          item.status != ReportStatus.resolved &&
-          item.date.year == now.year &&
-          item.date.month == now.month &&
-          item.date.day == now.day,
-    );
-    final todayPending = todayReports.where(
-      (item) => item.status == ReportStatus.pending,
-    );
-    final Set<String> newReportIds;
-    if (todayPending.isNotEmpty) {
-      newReportIds = todayPending
-          .map((item) => item.id)
-          .where((id) => !_viewedReportIds.contains(id))
-          .toSet();
-    } else if (todayReports.isNotEmpty) {
-      newReportIds = todayReports
-          .map((item) => item.id)
-          .where((id) => !_viewedReportIds.contains(id))
-          .toSet();
-    } else {
-      final newestId = _newestReportId(reports);
-      newReportIds = newestId != null && !_viewedReportIds.contains(newestId)
-          ? {newestId}
-          : <String>{};
-    }
+      ..sort((a, b) {
+        final aDate = history ? a.resolvedAt ?? a.date : a.date;
+        final bDate = history ? b.resolvedAt ?? b.date : b.date;
+        return dateOrder == 'Oldest to Newest'
+            ? aDate.compareTo(bDate)
+            : bDate.compareTo(aDate);
+      });
     final int totalPages = (values.length / 10).ceil();
     final int safePage = totalPages == 0 ? 0 : page.clamp(0, totalPages - 1);
 
@@ -210,6 +214,13 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
               label: 'Pending Reports',
               icon: Icons.folder_copy_outlined,
               accent: const Color(0xFFEF4444),
+              onTap: () {
+                setState(() {
+                  history = false;
+                  status = 'Pending';
+                });
+                _resetTable();
+              },
             ),
             MetricCardData(
               value:
@@ -217,6 +228,13 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
               label: 'Under Review',
               icon: Icons.visibility_outlined,
               accent: const Color(0xFF3B82F6),
+              onTap: () {
+                setState(() {
+                  history = false;
+                  status = 'Under Review';
+                });
+                _resetTable();
+              },
             ),
             MetricCardData(
               value:
@@ -224,6 +242,13 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
               label: 'Resolved',
               icon: Icons.check_circle_outline_rounded,
               accent: const Color(0xFF10B981),
+              onTap: () {
+                setState(() {
+                  history = true;
+                  status = 'All Statuses';
+                });
+                _resetTable();
+              },
             ),
             MetricCardData(
               value: '$blockedCount',
@@ -234,6 +259,7 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
                       : 'Blocked Accounts',
               icon: Icons.block_outlined,
               accent: const Color(0xFFEF4444),
+              onTap: () => context.go('/accounts'),
             ),
           ],
         ),
@@ -255,12 +281,14 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
               children: [
                 Toolbar(
                   controller: search,
+                  emphasized: true,
                   onChanged: (_) => _resetTable(),
                   onClear: () {
                     search.clear();
                     status = 'All Statuses';
                     stallCategory = 'All Categories';
                     targetType = 'All Types';
+                    dateOrder = 'Newest to Oldest';
                     history = false;
                     _resetTable();
                   },
@@ -296,40 +324,33 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
                       stallCategory = value;
                       _resetTable();
                     }),
-                    FilterButton(
-                      label: 'Export',
-                      icon: Icons.download_outlined,
-                      onTap: () => _export(values),
+                    _filter(
+                      dateOrder,
+                      const ['Newest to Oldest', 'Oldest to Newest'],
+                      (value) {
+                        setState(() => dateOrder = value);
+                        _resetTable();
+                      },
+                    ),
+                    ExportButton(
+                      onExportPdf: () => _exportReports(
+                        allReports: reports,
+                        filteredReports: values,
+                        format: ExportFormat.pdf,
+                      ),
+                      onExportExcel: () => _exportReports(
+                        allReports: reports,
+                        filteredReports: values,
+                        format: ExportFormat.excel,
+                      ),
                     ),
                   ],
                 ),
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 260),
-                  switchInCurve: Curves.easeInOut,
-                  switchOutCurve: Curves.easeInOut,
-                  transitionBuilder: (child, animation) => FadeTransition(
-                    opacity: animation,
-                    child: SizeTransition(
-                      sizeFactor: animation,
-                      child: child,
-                    ),
-                  ),
-                  child: _ReportTable(
-                    key: ValueKey(
-                      '$history-$targetType-${values.map((item) => item.id).join(',')}',
-                    ),
-                    history: history,
-                    values: values.skip(safePage * 10).take(10).toList(),
-                    newReportIds: newReportIds,
-                    verticalController: tableScrollController,
-                    onOpen: (item) {
-                      _markReportViewed(item.id);
-                      showBlurredDialog(
-                        context,
-                        (context) => ReportReviewDialog(report: item),
-                      );
-                    },
-                  ),
+                _ReportTable(
+                  history: history,
+                  values: values.skip(safePage * 10).take(10).toList(),
+                  verticalController: tableScrollController,
+                  onOpen: _openReport,
                 ),
                 if (values.isNotEmpty)
                   PaginationBar(
@@ -358,57 +379,46 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
         label: label,
         values: values,
         onSelected: onChanged,
+        alwaysActive: true,
       );
 
-  void _export(List<Report> values) {
-    final csv = buildCsv([
-      [
-        'Type',
-        'Account / Issue',
-        'Submitted By',
-        'Reason',
-        'Category',
-        'Date',
-        'Status',
-        'Priority'
-      ],
-      ...values.map(
-        (item) => [
-          item.type == 'Vendor' ? 'Stall Holder' : item.type,
-          item.accountIssue,
-          item.submittedBy,
-          item.reason,
-          item.category ?? 'FRUITS',
-          item.date.toIso8601String(),
-          enumLabel(item.status),
-          enumLabel(item.priority),
-        ],
-      ),
-    ]);
-    final filename = targetType == 'Stall Holders'
-        ? 'palengkego-stall-holder-reports.csv'
-        : targetType == 'Customers'
-            ? 'palengkego-customer-reports.csv'
-            : 'palengkego-reports.csv';
-    downloadCsv(csv, filename);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Reports CSV downloaded.')),
+  Future<void> _exportReports({
+    required List<Report> allReports,
+    required List<Report> filteredReports,
+    required ExportFormat format,
+  }) async {
+    final filters = <String>[
+      history ? 'Resolved Reports' : 'Review Reports',
+      if (targetType != 'All Types') 'Account Type: $targetType',
+      if (status != 'All Statuses') 'Status: $status',
+      if (stallCategory != 'All Categories') 'Stall Category: $stallCategory',
+      if (dateOrder != 'Newest to Oldest') 'Sort: $dateOrder',
+      if (search.text.trim().isNotEmpty) 'Search: "${search.text.trim()}"',
+    ];
+    final doc = ComplaintExportData.build(
+      allReports: allReports,
+      filteredReports: filteredReports,
+      activeFilters: filters.join(' | '),
+      accountType: targetType,
+    );
+    await AdminExportService.export(
+      context: context,
+      ref: ref,
+      doc: doc,
+      format: format,
     );
   }
 }
 
 class _ReportTable extends StatelessWidget {
   const _ReportTable({
-    super.key,
     required this.history,
     required this.values,
-    required this.newReportIds,
     required this.verticalController,
     required this.onOpen,
   });
   final bool history;
   final List<Report> values;
-  final Set<String> newReportIds;
   final ScrollController verticalController;
   final ValueChanged<Report> onOpen;
   @override
@@ -416,16 +426,7 @@ class _ReportTable extends StatelessWidget {
     final colors = semanticColors(context);
     final rows = values.map(
       (item) {
-        final isNew = !history && newReportIds.contains(item.id);
         return DataRow(
-          color: isNew
-              ? WidgetStateProperty.resolveWith<Color?>((states) {
-                  if (states.contains(WidgetState.hovered)) {
-                    return colors.info.withValues(alpha: 0.13);
-                  }
-                  return colors.info.withValues(alpha: 0.07);
-                })
-              : null,
           onSelectChanged: (_) => onOpen(item),
           cells: history
               ? [
@@ -460,23 +461,12 @@ class _ReportTable extends StatelessWidget {
                           : longDate.format(item.resolvedAt!),
                     ),
                   ),
-                  DataCell(Text(item.resolvedBy ?? 'Administrator')),
                 ]
               : [
                   DataCell(
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (isNew)
-                          Container(
-                            width: 3.5,
-                            height: 24,
-                            margin: const EdgeInsets.only(right: 8),
-                            decoration: BoxDecoration(
-                              color: colors.info,
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
                         Flexible(
                           child: Text(
                             item.type == 'Vendor' ? 'Stall Holder' : item.type,
@@ -498,11 +488,6 @@ class _ReportTable extends StatelessWidget {
                             fontWeight: FontWeight.w800,
                           ),
                         ),
-                        if (isNew)
-                          const StatusBadge(
-                            label: 'NEW',
-                            kind: BadgeKind.info,
-                          ),
                       ],
                     ),
                   ),
@@ -515,28 +500,19 @@ class _ReportTable extends StatelessWidget {
                   ),
                   DataCell(
                     Text(
-                      '${item.date.month.toString().padLeft(2, '0')}/${item.date.day.toString().padLeft(2, '0')}/${item.date.year}',
+                      shortDate.format(item.date),
                     ),
                   ),
                   DataCell(
-                    StatusBadge(
-                      label: enumLabel(item.status),
-                      kind: item.status == ReportStatus.resolved
-                          ? BadgeKind.success
-                          : item.status == ReportStatus.underReview
-                              ? BadgeKind.info
-                              : BadgeKind.danger,
-                    ),
-                  ),
-                  DataCell(
-                    Text(
-                      enumLabel(item.priority),
-                      style: TextStyle(
-                        color: item.priority == Priority.high
-                            ? colors.danger
-                            : item.priority == Priority.medium
-                                ? colors.warning
-                                : colors.mutedText,
+                    Padding(
+                      padding: const EdgeInsets.only(left: 32),
+                      child: StatusBadge(
+                        label: enumLabel(item.status),
+                        kind: item.status == ReportStatus.resolved
+                            ? BadgeKind.success
+                            : item.status == ReportStatus.underReview
+                                ? BadgeKind.info
+                                : BadgeKind.danger,
                       ),
                     ),
                   ),
@@ -546,7 +522,7 @@ class _ReportTable extends StatelessWidget {
     ).toList();
     return ScrollableDataTable(
       verticalController: verticalController,
-      minWidth: history ? 1450 : 1350,
+      minWidth: 1300,
       columnSpacing: 18,
       columns: history
           ? const [
@@ -564,7 +540,7 @@ class _ReportTable extends StatelessWidget {
               ),
               DataColumn(
                 columnWidth: FlexColumnWidth(1.25),
-                label: Text('REASON'),
+                label: Text('VIOLATION TYPE'),
               ),
               DataColumn(
                 columnWidth: FlexColumnWidth(1.3),
@@ -577,10 +553,6 @@ class _ReportTable extends StatelessWidget {
               DataColumn(
                 columnWidth: FlexColumnWidth(1.35),
                 label: Text('RESOLVED DATE'),
-              ),
-              DataColumn(
-                columnWidth: FlexColumnWidth(1.15),
-                label: Text('RESOLVED BY'),
               ),
             ]
           : const [
@@ -598,23 +570,22 @@ class _ReportTable extends StatelessWidget {
               ),
               DataColumn(
                 columnWidth: FlexColumnWidth(1.4),
-                label: Text('REASON'),
+                label: Text('VIOLATION TYPE'),
               ),
               DataColumn(
                 columnWidth: FlexColumnWidth(1.1),
                 label: Text('CATEGORY'),
               ),
               DataColumn(
-                columnWidth: FixedColumnWidth(130),
+                columnWidth: FixedColumnWidth(170),
                 label: Text('DATE'),
               ),
               DataColumn(
                 columnWidth: FlexColumnWidth(1.1),
-                label: Text('STATUS'),
-              ),
-              DataColumn(
-                columnWidth: FixedColumnWidth(150),
-                label: Text('PRIORITY'),
+                label: Padding(
+                  padding: EdgeInsets.only(left: 32),
+                  child: Text('STATUS'),
+                ),
               ),
             ],
       rows: rows,
@@ -785,6 +756,9 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
         : 'CUSTOMER';
   }
 
+  String _reporterTypeLabel() =>
+      _reportedAccountTypeLabel() == 'CUSTOMER' ? 'STALL HOLDER' : 'CUSTOMER';
+
   String _reportedAccountName() {
     final account = _reportedAccount(ref.watch(appDataProvider));
     if (account != null && account.name.isNotEmpty) return account.name;
@@ -797,23 +771,16 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
     final account = _reportedAccount(ref.watch(appDataProvider));
     final isCustomer =
         widget.report.type == 'Customer' || account?.type == 'Customer';
-    return isCustomer
-        ? 'Customer Account'
-        : 'Stall Holder: ${widget.report.owner.isNotEmpty ? widget.report.owner : widget.report.vendorName}';
+    return isCustomer ? 'Customer Account' : 'Stall Holder Account';
   }
 
-  Future<void> _dismissReport({bool markResolved = false}) async {
+  Future<void> _resolveReport() async {
     final resolutionNote = TextEditingController();
-    final title = markResolved ? 'Mark Report as Resolved?' : 'Dismiss Report?';
-    final confirmation = markResolved
-        ? 'This will mark the report as resolved without changing the account '
-            'status.'
-        : 'This will dismiss the report without changing the account status.';
     try {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: Text(title),
+          title: const Text('Mark Report as Resolved?'),
           content: SizedBox(
             width: 420,
             child: Column(
@@ -824,7 +791,9 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
                 const SizedBox(height: 7),
                 Text('Reported User: ${widget.report.accountIssue}'),
                 const SizedBox(height: 14),
-                Text(confirmation),
+                const Text(
+                  'This will mark the report as resolved without changing the account status.',
+                ),
                 const SizedBox(height: 14),
                 TextField(
                   controller: resolutionNote,
@@ -844,41 +813,35 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
             ),
             FilledButton(
               onPressed: () => Navigator.pop(dialogContext, true),
-              child:
-                  Text(markResolved ? 'Mark as Resolved' : 'Confirm Dismiss'),
+              child: const Text('Mark as Resolved'),
             ),
           ],
         ),
       );
       if (confirmed != true || !mounted) return;
       setState(() => processing = true);
-      final error = markResolved
-          ? await ref.read(appDataProvider.notifier).resolveReport(
-                reportId: widget.report.id,
-                note: resolutionNote.text,
-              )
-          : await ref.read(appDataProvider.notifier).dismissReport(
-                reportId: widget.report.id,
-                note: resolutionNote.text,
-              );
+      final error = await ref.read(appDataProvider.notifier).resolveReport(
+            reportId: widget.report.id,
+            note: resolutionNote.text,
+          );
       if (!mounted) return;
       if (error != null) {
         setState(() => processing = false);
         _showError(error);
         return;
       }
+      final messenger = ScaffoldMessenger.of(context);
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            markResolved
-                ? 'Report resolved successfully. Moved to Resolved Reports.'
-                : 'Report dismissed successfully. Moved to Resolved Reports.',
-          ),
+      messenger.showSnackBar(
+        const SnackBar(
+          content:
+              Text('Report resolved successfully. Moved to Resolved Reports.'),
         ),
       );
     } finally {
-      resolutionNote.dispose();
+      Future.delayed(const Duration(milliseconds: 300), () {
+        resolutionNote.dispose();
+      });
     }
   }
 
@@ -960,20 +923,22 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
         _showError(error);
         return;
       }
+      final messenger = ScaffoldMessenger.of(context);
+      final router = GoRouter.of(context);
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(
           content:
               Text('Account blocked successfully. Report moved to Resolved.'),
         ),
       );
-      if (mounted) {
-        context.go(
-          '/accounts?accountId=${Uri.encodeComponent(account.id)}&open=1',
-        );
-      }
+      router.go(
+        '/accounts?accountId=${Uri.encodeComponent(account.id)}&open=1',
+      );
     } finally {
-      reason.dispose();
+      Future.delayed(const Duration(milliseconds: 300), () {
+        reason.dispose();
+      });
     }
   }
 
@@ -1014,13 +979,14 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
           .read(appDataProvider.notifier)
           .updateReport(widget.report.id, value, result);
       if (mounted) {
+        final messenger = ScaffoldMessenger.of(context);
         Navigator.pop(context);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('$title completed.')));
+        messenger.showSnackBar(SnackBar(content: Text('$title completed.')));
       }
     } finally {
-      input.dispose();
+      Future.delayed(const Duration(milliseconds: 300), () {
+        input.dispose();
+      });
     }
   }
 
@@ -1059,7 +1025,7 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
                       _info(context),
                       const SizedBox(height: 16),
                       Text(
-                        'REASON: ${widget.report.reason.toUpperCase()}',
+                        'VIOLATION TYPE: ${widget.report.reason.toUpperCase()}',
                         style: const TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
@@ -1213,20 +1179,13 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
   }
 
   Widget _footer(BuildContext context, _ReportedAccount? account) {
-    final outlineStyle = OutlinedButton.styleFrom(
+    final warningStyle = FilledButton.styleFrom(
+      backgroundColor: semanticColors(context).warning,
       minimumSize: const Size(0, 36),
       padding: const EdgeInsets.symmetric(horizontal: 14),
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
-      ),
-    );
-    final warningStyle = outlineStyle.copyWith(
-      foregroundColor: WidgetStatePropertyAll(
-        semanticColors(context).warning,
-      ),
-      side: WidgetStatePropertyAll(
-        BorderSide(color: semanticColors(context).warning),
       ),
     );
     final resolvedStyle = FilledButton.styleFrom(
@@ -1248,7 +1207,7 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
       ),
     );
 
-    final warningBtn = OutlinedButton.icon(
+    final warningBtn = FilledButton.icon(
       onPressed: processing
           ? null
           : () => action(
@@ -1260,14 +1219,8 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
       label: const Text('Send Warning', style: TextStyle(fontSize: 11.5)),
     );
 
-    final dismissBtn = OutlinedButton(
-      onPressed: processing ? null : _dismissReport,
-      style: outlineStyle,
-      child: const Text('Dismiss Report', style: TextStyle(fontSize: 11.5)),
-    );
-
     final resolveBtn = FilledButton.icon(
-      onPressed: processing ? null : () => _dismissReport(markResolved: true),
+      onPressed: processing ? null : _resolveReport,
       style: resolvedStyle,
       icon: const Icon(Icons.check_circle_outline, size: 16),
       label: const Text('Mark as Resolved', style: TextStyle(fontSize: 11.5)),
@@ -1294,11 +1247,9 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
               children: [
                 Expanded(child: warningBtn),
                 const SizedBox(width: 10),
-                Expanded(child: dismissBtn),
+                Expanded(child: blockBtn),
                 const SizedBox(width: 10),
                 Expanded(child: resolveBtn),
-                const SizedBox(width: 10),
-                Expanded(child: blockBtn),
               ],
             );
           }
@@ -1309,16 +1260,13 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
                 children: [
                   Expanded(child: warningBtn),
                   const SizedBox(width: 10),
-                  Expanded(child: dismissBtn),
+                  Expanded(child: blockBtn),
                 ],
               ),
               const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(child: resolveBtn),
-                  const SizedBox(width: 10),
-                  Expanded(child: blockBtn),
-                ],
+              SizedBox(
+                width: double.infinity,
+                child: resolveBtn,
               ),
             ],
           );
@@ -1387,12 +1335,17 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
       children: [
         Row(
           children: [
-            Expanded(child: _infoHeading(context, 'REPORTER INFORMATION')),
+            Expanded(
+              child: _infoHeading(
+                context,
+                'COMPLAINT FROM (${_reporterTypeLabel()})',
+              ),
+            ),
             const SizedBox(width: 24),
             Expanded(
               child: _infoHeading(
                 context,
-                'REPORTED ACCOUNT (${_reportedAccountTypeLabel()})',
+                'RELATED ${_reportedAccountTypeLabel()}',
               ),
             ),
           ],
@@ -1530,14 +1483,20 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
         child: InkWell(
           onTap: () => showDialog<void>(
             context: context,
-            builder: (context) => Dialog(
-              child: InteractiveViewer(
-                child: Image.asset(
-                  asset,
-                  errorBuilder: (context, error, stackTrace) =>
-                      _missingEvidence(context),
+            builder: (_) => _EvidenceViewerDialog(
+              initialAsset: asset,
+              evidence: const [
+                _EvidenceItem(
+                  asset: 'assets/images/spoiled_produce.png',
+                  label: 'Spoiled produce',
+                  filename: 'spoiled_produce.png',
                 ),
-              ),
+                _EvidenceItem(
+                  asset: 'assets/images/mobile_conversation.png',
+                  label: 'Mobile conversation',
+                  filename: 'mobile_conversation.png',
+                ),
+              ],
             ),
           ),
           child: Column(
@@ -1636,7 +1595,7 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
       ),
       TableRow(children: [
         _cell('Sep 15, 2023'),
-        _cell(isCustomer ? 'Dispute with Stall Holder' : 'Late Delivery'),
+        _cell(isCustomer ? 'Customer Conflict' : 'Delivery Problem'),
         _cell('Warning Issued'),
         _cell('Closed'),
       ]),
@@ -1646,7 +1605,7 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
       rows.add(
         TableRow(children: [
           _cell('Aug 02, 2023'),
-          _cell(isCustomer ? 'Abusive Messaging' : 'Incorrect Pricing'),
+          _cell(isCustomer ? 'Order Management' : 'Payment Problem'),
           _cell('System Flag'),
           _cell('Closed'),
         ]),
@@ -1667,6 +1626,464 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
             fontSize: 9.5,
             fontWeight: isHeader ? FontWeight.w800 : FontWeight.normal,
           ),
+        ),
+      );
+}
+
+class _EvidenceItem {
+  const _EvidenceItem({
+    required this.asset,
+    required this.label,
+    required this.filename,
+  });
+
+  final String asset;
+  final String label;
+  final String filename;
+}
+
+class _EvidenceViewerDialog extends StatefulWidget {
+  const _EvidenceViewerDialog({
+    required this.evidence,
+    required this.initialAsset,
+  });
+
+  final List<_EvidenceItem> evidence;
+  final String initialAsset;
+
+  @override
+  State<_EvidenceViewerDialog> createState() => _EvidenceViewerDialogState();
+}
+
+class _EvidenceViewerDialogState extends State<_EvidenceViewerDialog> {
+  static const _zoomSteps = [1.0, 1.25, 1.5, 1.75, 2.0];
+  final _transformController = TransformationController();
+  int _index = 0;
+  int _zoomIndex = 0;
+  int _reloadToken = 0;
+  bool _isDragging = false;
+  bool _fullView = false;
+
+  _EvidenceItem get _item => widget.evidence[_index];
+
+  @override
+  void initState() {
+    super.initState();
+    _index = widget.evidence.indexWhere(
+      (item) => item.asset == widget.initialAsset,
+    );
+    if (_index < 0) _index = 0;
+  }
+
+  @override
+  void dispose() {
+    _transformController.dispose();
+    super.dispose();
+  }
+
+  void _setZoom(int index) {
+    setState(() => _zoomIndex = index.clamp(0, _zoomSteps.length - 1));
+    final zoom = _zoomSteps[_zoomIndex];
+    _transformController.value = Matrix4.diagonal3Values(zoom, zoom, 1.0);
+  }
+
+  void _changeEvidence(int direction) {
+    final next = _index + direction;
+    if (next < 0 || next >= widget.evidence.length) return;
+    setState(() {
+      _index = next;
+      _zoomIndex = 0;
+      _isDragging = false;
+      _reloadToken++;
+    });
+    _transformController.value = Matrix4.identity();
+  }
+
+  KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.escape) {
+      Navigator.of(context).pop();
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      _changeEvidence(-1);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+      _changeEvidence(1);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  Future<void> _download() async {
+    try {
+      final bytes = await rootBundle.load(_item.asset);
+      await FilePicker.platform.saveFile(
+        dialogTitle: 'Save evidence',
+        fileName: _item.filename,
+        bytes: bytes.buffer.asUint8List(),
+        type: FileType.image,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to download the evidence file.')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = semanticColors(context);
+    final screenSize = MediaQuery.sizeOf(context);
+    final viewerHeight = _fullView
+        ? screenSize.height
+        : (screenSize.height * .72).clamp(420.0, 620.0).toDouble();
+    return Focus(
+      autofocus: true,
+      onKeyEvent: _handleKey,
+      child: Dialog(
+        insetPadding: _fullView
+            ? EdgeInsets.zero
+            : const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        backgroundColor: colors.cardBackground,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+          width: _fullView ? screenSize.width : 720,
+          height: viewerHeight,
+          child: Column(
+            children: [
+              _header(colors),
+              Expanded(child: _imageArea(colors)),
+              _thumbnails(colors),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _header(AppSemanticColors colors) => Container(
+        height: 62,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: colors.cardBackground,
+          border: Border(bottom: BorderSide(color: colors.subtleBorder)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: colors.heroBackground,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.image_outlined,
+                  color: colors.heroForeground, size: 20),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Evidence Viewer',
+                    style: TextStyle(
+                      color: colors.primaryText,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    _item.label,
+                    style: TextStyle(color: colors.secondaryText, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            Text(
+              '${_index + 1} of ${widget.evidence.length}',
+              style: TextStyle(
+                color: colors.primaryText,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(width: 18),
+            _toolbarButton(
+              colors: colors,
+              tooltip: 'Zoom in',
+              semanticLabel: 'Zoom in',
+              icon: Icons.zoom_in_outlined,
+              onPressed: _zoomIndex < _zoomSteps.length - 1
+                  ? () => _setZoom(_zoomIndex + 1)
+                  : null,
+            ),
+            const SizedBox(width: 6),
+            _toolbarButton(
+              colors: colors,
+              tooltip: 'Zoom out',
+              semanticLabel: 'Zoom out',
+              icon: Icons.zoom_out_outlined,
+              onPressed: _zoomIndex > 0 ? () => _setZoom(_zoomIndex - 1) : null,
+            ),
+            Container(
+              width: 1,
+              height: 24,
+              margin: const EdgeInsets.symmetric(horizontal: 10),
+              color: colors.subtleBorder,
+            ),
+            _toolbarButton(
+              colors: colors,
+              tooltip: 'Download evidence',
+              semanticLabel: 'Download evidence',
+              icon: Icons.download_outlined,
+              onPressed: _download,
+            ),
+            const SizedBox(width: 6),
+            _toolbarButton(
+              colors: colors,
+              tooltip: 'Open full view',
+              semanticLabel: 'Open evidence in full view',
+              icon: _fullView
+                  ? Icons.fullscreen_exit_outlined
+                  : Icons.open_in_full_outlined,
+              onPressed: () => setState(() => _fullView = !_fullView),
+            ),
+            const SizedBox(width: 10),
+            _toolbarButton(
+              colors: colors,
+              tooltip: 'Close',
+              semanticLabel: 'Close evidence viewer',
+              icon: Icons.close_rounded,
+              onPressed: () => Navigator.of(context).pop(),
+              close: true,
+            ),
+          ],
+        ),
+      );
+
+  Widget _toolbarButton({
+    required AppSemanticColors colors,
+    required String tooltip,
+    required String semanticLabel,
+    required IconData icon,
+    required VoidCallback? onPressed,
+    bool close = false,
+  }) =>
+      Semantics(
+        button: true,
+        label: semanticLabel,
+        child: Tooltip(
+          message: tooltip,
+          child: IconButton(
+            tooltip: tooltip,
+            onPressed: onPressed,
+            icon: Icon(icon, size: 21),
+            style: IconButton.styleFrom(
+              minimumSize: const Size(42, 42),
+              maximumSize: const Size(42, 42),
+              foregroundColor:
+                  close ? colors.heroBackground : colors.primaryText,
+              disabledForegroundColor: colors.disabledText,
+              backgroundColor: close
+                  ? colors.heroBackground.withValues(alpha: 0.12)
+                  : colors.tableHeader,
+              side: close
+                  ? BorderSide.none
+                  : BorderSide(color: colors.subtleBorder),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ),
+      );
+
+  Widget _imageArea(AppSemanticColors colors) => Container(
+        color: Theme.of(context).brightness == Brightness.dark
+            ? const Color(0xFF0F172A)
+            : const Color(0xFFF8FAFC),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(48, 12, 48, 12),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              MouseRegion(
+                cursor: _zoomIndex > 0
+                    ? (_isDragging
+                        ? SystemMouseCursors.grabbing
+                        : SystemMouseCursors.grab)
+                    : SystemMouseCursors.basic,
+                child: GestureDetector(
+                  onDoubleTap: () => _setZoom(_zoomIndex == 0 ? 2 : 0),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: InteractiveViewer(
+                      transformationController: _transformController,
+                      minScale: 1,
+                      maxScale: 2,
+                      panEnabled: _zoomIndex > 0,
+                      scaleEnabled: false,
+                      boundaryMargin: const EdgeInsets.all(28),
+                      onInteractionStart: (_) {
+                        if (_zoomIndex > 0) setState(() => _isDragging = true);
+                      },
+                      onInteractionEnd: (_) {
+                        if (_isDragging) setState(() => _isDragging = false);
+                      },
+                      child: Image.asset(
+                        _item.asset,
+                        key: ValueKey('${_item.asset}-$_reloadToken'),
+                        width: double.infinity,
+                        height: double.infinity,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) =>
+                            _errorState(colors),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              if (_index > 0)
+                _arrowButton(colors, Icons.chevron_left_rounded,
+                    () => _changeEvidence(-1), Alignment.centerLeft),
+              if (_index < widget.evidence.length - 1)
+                _arrowButton(colors, Icons.chevron_right_rounded,
+                    () => _changeEvidence(1), Alignment.centerRight),
+            ],
+          ),
+        ),
+      );
+
+  Widget _arrowButton(AppSemanticColors colors, IconData icon,
+          VoidCallback onPressed, Alignment alignment) =>
+      Align(
+        alignment: alignment,
+        child: Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: IconButton(
+            tooltip: icon == Icons.chevron_left_rounded
+                ? 'Previous evidence'
+                : 'Next evidence',
+            onPressed: onPressed,
+            style: IconButton.styleFrom(
+              minimumSize: const Size(44, 44),
+              backgroundColor: colors.cardBackground.withValues(alpha: 0.95),
+              foregroundColor: colors.primaryText,
+              side: BorderSide(color: colors.subtleBorder),
+            ),
+            icon: Icon(icon),
+          ),
+        ),
+      );
+
+  Widget _errorState(AppSemanticColors colors) => ColoredBox(
+        color: colors.tableHeader,
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.broken_image_outlined,
+                  color: colors.warning, size: 34),
+              const SizedBox(height: 10),
+              Text(
+                'Unable to load evidence',
+                style: TextStyle(
+                  color: colors.primaryText,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                'The evidence file could not be displayed. Please try again.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: colors.secondaryText, fontSize: 12),
+              ),
+              const SizedBox(height: 14),
+              OutlinedButton.icon(
+                onPressed: () => setState(() => _reloadToken++),
+                icon: const Icon(Icons.refresh_rounded, size: 17),
+                label: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+
+  Widget _thumbnails(AppSemanticColors colors) => Container(
+        height: 100,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        decoration: BoxDecoration(
+          color: colors.cardBackground,
+          border: Border(top: BorderSide(color: colors.subtleBorder)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(widget.evidence.length, (index) {
+            final item = widget.evidence[index];
+            final selected = index == _index;
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 5),
+              child: Semantics(
+                button: true,
+                label: 'View evidence ${index + 1}: ${item.label}',
+                child: InkWell(
+                  onTap: () => _changeEvidence(index - _index),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 100,
+                        height: 62,
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: selected
+                                ? colors.heroBackground
+                                : colors.subtleBorder,
+                            width: selected ? 2 : 1,
+                          ),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(5),
+                          child: Image.asset(item.asset, fit: BoxFit.cover),
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${index + 1}. ${item.label}',
+                        style: TextStyle(
+                          color: selected
+                              ? colors.heroBackground
+                              : colors.secondaryText,
+                          fontSize: 9,
+                          fontWeight:
+                              selected ? FontWeight.w700 : FontWeight.normal,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
         ),
       );
 }

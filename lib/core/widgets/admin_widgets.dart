@@ -154,16 +154,18 @@ class AppLogo extends StatelessWidget {
         children: [
           basketIcon,
           SizedBox(width: compact ? 10 : 12),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              titleText,
-              if (showTagline && !compact) ...[
-                const SizedBox(height: 2),
-                taglineText,
+          Flexible(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                titleText,
+                if (showTagline && !compact) ...[
+                  const SizedBox(height: 2),
+                  taglineText,
+                ],
               ],
-            ],
+            ),
           ),
         ],
       ),
@@ -408,61 +410,99 @@ class PageHeaderMetricRibbon extends StatelessWidget {
   }
 }
 
-class PageHeaderMetricTile extends StatelessWidget {
+class PageHeaderMetricTile extends StatefulWidget {
   const PageHeaderMetricTile({super.key, required this.data});
   final MetricCardData data;
 
   @override
+  State<PageHeaderMetricTile> createState() => _PageHeaderMetricTileState();
+}
+
+class _PageHeaderMetricTileState extends State<PageHeaderMetricTile> {
+  bool _isHovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final colors = semanticColors(context);
-    return InkWell(
-      onTap: data.onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        child: Row(
-          children: [
-            Icon(
-              data.icon,
-              size: 18,
-              color: data.accent,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
+    final data = widget.data;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      cursor: data.onTap != null
+          ? SystemMouseCursors.click
+          : SystemMouseCursors.basic,
+      child: InkWell(
+        onTap: data.onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Stack(
+            children: [
+              Row(
                 children: [
-                  Text(
-                    data.label.toUpperCase(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
-                      color: colors.secondaryText,
-                      fontSize: 9.5,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.7,
-                    ),
+                  Icon(
+                    data.icon,
+                    size: 18,
+                    color: data.accent,
                   ),
-                  const SizedBox(height: 2),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: AnimatedCounter(
-                      value: data.value,
-                      style: data.valueStyle ??
-                          GoogleFonts.plusJakartaSans(
-                            color: colors.primaryText,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.4,
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          data.label.toUpperCase(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                            color: colors.secondaryText,
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.7,
                           ),
+                        ),
+                        const SizedBox(height: 2),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: AnimatedCounter(
+                            value: data.value,
+                            style: data.valueStyle ??
+                                GoogleFonts.plusJakartaSans(
+                                  color: colors.primaryText,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.4,
+                                ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
-            ),
-          ],
+              if (data.onTap != null)
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    curve: Curves.easeOut,
+                    transform:
+                        Matrix4.translationValues(_isHovered ? 2.0 : 0.0, 0, 0),
+                    child: Icon(
+                      Icons.arrow_outward_rounded,
+                      size: 12,
+                      color: _isHovered
+                          ? data.accent
+                          : colors.secondaryText.withValues(alpha: 0.5),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -708,12 +748,14 @@ class Toolbar extends StatelessWidget {
     this.onClear,
     this.searchHint = 'Search by name, email, or application ID...',
     this.trailing = const [],
+    this.emphasized = true,
   });
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
   final VoidCallback? onClear;
   final String searchHint;
   final List<Widget> trailing;
+  final bool emphasized;
 
   @override
   Widget build(BuildContext context) {
@@ -729,6 +771,8 @@ class Toolbar extends StatelessWidget {
         ),
         decoration: InputDecoration(
           isDense: true,
+          filled: true,
+          fillColor: semanticColors(context).hoverSurface.withValues(alpha: 0.95),
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           prefixIcon: Icon(
@@ -755,6 +799,21 @@ class Toolbar extends StatelessWidget {
                   },
                   icon: const Icon(Icons.close_rounded, size: 16),
                 ),
+          enabledBorder: emphasized
+              ? OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(9),
+                  borderSide: BorderSide(
+                      color: semanticColors(context)
+                          .secondaryText
+                          .withValues(alpha: 0.45)),
+                )
+              : null,
+          focusedBorder: emphasized
+              ? OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(9),
+                  borderSide: BorderSide(color: semanticColors(context).accent),
+                )
+              : null,
         ),
       ),
     );
@@ -768,11 +827,16 @@ class Toolbar extends StatelessWidget {
             child: OutlinedButton.icon(
               onPressed: onClear,
               style: OutlinedButton.styleFrom(
-                foregroundColor: semanticColors(context).secondaryText,
+                foregroundColor: emphasized
+                    ? semanticColors(context).primaryText
+                    : semanticColors(context).secondaryText,
                 backgroundColor: semanticColors(context).hoverSurface,
                 side: BorderSide(
-                  color: semanticColors(context).subtleBorder,
-                ),
+                    color: emphasized
+                        ? semanticColors(context)
+                            .secondaryText
+                            .withValues(alpha: 0.45)
+                        : semanticColors(context).subtleBorder),
                 minimumSize: const Size(0, 38),
                 padding: const EdgeInsets.symmetric(horizontal: 11),
                 shape: RoundedRectangleBorder(
@@ -840,7 +904,7 @@ class FilterButton extends StatelessWidget {
     required this.label,
     this.icon = Icons.keyboard_arrow_down_rounded,
     this.onTap,
-    this.isActive = false,
+    this.isActive = true,
   });
   final String label;
   final IconData icon;
@@ -916,12 +980,14 @@ class FilterMenuButton extends StatelessWidget {
     required this.values,
     required this.onSelected,
     this.icon = Icons.keyboard_arrow_down_rounded,
+    this.alwaysActive = true,
   });
 
   final String label;
   final List<String> values;
   final ValueChanged<String> onSelected;
   final IconData icon;
+  final bool alwaysActive;
 
   @override
   Widget build(BuildContext context) {
@@ -930,7 +996,7 @@ class FilterMenuButton extends StatelessWidget {
         label == 'Newest First' ||
         label == 'Stall Category' ||
         label == 'Account Type';
-    final isActive = !isDefault && values.contains(label);
+    final isActive = alwaysActive || (!isDefault && values.contains(label));
 
     return MenuAnchor(
       alignmentOffset: const Offset(0, 4),
@@ -1044,9 +1110,12 @@ class ExportButton extends StatelessWidget {
     final isEnabled = hasMenu || onTap != null;
 
     final effectiveFg = foregroundColor ??
-        (isEnabled ? colors.secondaryText : colors.disabledText);
+        (isEnabled ? colors.primaryText : colors.disabledText);
     final effectiveBg = backgroundColor ?? colors.hoverSurface;
-    final effectiveBorder = borderColor ?? colors.subtleBorder;
+    final effectiveBorder = borderColor ??
+        (isEnabled
+            ? colors.secondaryText.withValues(alpha: 0.45)
+            : colors.subtleBorder);
 
     final buttonChild = OutlinedButton(
       onPressed: isEnabled ? (hasMenu ? null : onTap) : null,
@@ -1080,9 +1149,7 @@ class ExportButton extends StatelessWidget {
             Icon(
               Icons.keyboard_arrow_down_rounded,
               size: 15,
-              color: foregroundColor != null
-                  ? foregroundColor!.withValues(alpha: 0.8)
-                  : colors.mutedText,
+              color: effectiveFg.withValues(alpha: 0.8),
             ),
           ],
         ],
@@ -1410,7 +1477,7 @@ class ApplicationStatusBadge extends StatelessWidget {
     final colors = semanticColors(context);
     final label = switch (status) {
       ApplicationStatus.verified => 'Verified',
-      ApplicationStatus.reviewing => 'Reviewing',
+      ApplicationStatus.reviewing => 'Pending',
       ApplicationStatus.invalidDocs => 'Re-Upload Requested',
       ApplicationStatus.rejected => 'Rejected',
     };
@@ -1471,6 +1538,7 @@ class ScrollableDataTable extends StatelessWidget {
     this.rowHeight = 68,
     this.minWidth = 0,
     this.emptyState = const EmptyState(),
+    this.horizontalScroll = true,
   });
 
   final List<DataColumn> columns;
@@ -1480,6 +1548,7 @@ class ScrollableDataTable extends StatelessWidget {
   final double rowHeight;
   final double minWidth;
   final Widget emptyState;
+  final bool horizontalScroll;
 
   @override
   Widget build(BuildContext context) => RepaintBoundary(
@@ -1526,28 +1595,31 @@ class ScrollableDataTable extends StatelessWidget {
                   ),
                 );
 
-            return SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minWidth: tableWidth),
-                child: AnimatedSwitcher(
-                  duration: AppMotion.duration(context, AppMotion.component),
-                  transitionBuilder: (child, animation) => FadeTransition(
-                    opacity: animation,
-                    child: child,
-                  ),
-                  child: rows.isEmpty
-                      ? KeyedSubtree(
-                          key: const ValueKey('empty'),
-                          child: emptyState,
-                        )
-                      : KeyedSubtree(
-                          key: const ValueKey('rows'),
-                          child: table(tableRows: rows, headingHeight: 48),
-                        ),
+            final content = ConstrainedBox(
+              constraints: BoxConstraints(minWidth: tableWidth),
+              child: AnimatedSwitcher(
+                duration: AppMotion.duration(context, AppMotion.component),
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: child,
                 ),
+                child: rows.isEmpty
+                    ? KeyedSubtree(
+                        key: const ValueKey('empty'),
+                        child: emptyState,
+                      )
+                    : KeyedSubtree(
+                        key: const ValueKey('rows'),
+                        child: table(tableRows: rows, headingHeight: 48),
+                      ),
               ),
             );
+            return horizontalScroll
+                ? SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: content,
+                  )
+                : content;
           },
         ),
       );
@@ -1578,47 +1650,44 @@ class PaginationBar extends StatelessWidget {
     }
 
     final int safePage = page.clamp(0, pageCount - 1);
-    final pagination = AnimatedSwitcher(
-      duration: AppMotion.duration(context, AppMotion.component),
-      transitionBuilder: (child, animation) => FadeTransition(
-        opacity: animation,
-        child: child,
-      ),
-      child: KeyedSubtree(
-        key: ValueKey(safePage),
-        child: Wrap(
-          spacing: 5,
-          children: [
-            _button(
-              context,
-              Icons.chevron_left_rounded,
-              safePage > 0 ? () => onPageChanged(safePage - 1) : null,
-            ),
-            for (var i = 0; i < pageCount && i < 3; i++)
-              _button(
-                context,
-                i + 1,
-                () => onPageChanged(i),
-                active: i == safePage,
-              ),
-            if (pageCount > 4) _button(context, '...', null),
-            if (pageCount > 3)
-              _button(
-                context,
-                pageCount,
-                () => onPageChanged(pageCount - 1),
-                active: safePage == pageCount - 1,
-              ),
-            _button(
-              context,
-              Icons.chevron_right_rounded,
-              safePage < pageCount - 1
-                  ? () => onPageChanged(safePage + 1)
-                  : null,
-            ),
-          ],
+    final pagination = Wrap(
+      spacing: 5,
+      children: [
+        _button(
+          context,
+          Icons.chevron_left_rounded,
+          safePage > 0 ? () => onPageChanged(safePage - 1) : null,
         ),
-      ),
+        if (pageCount <= 5)
+          for (var i = 0; i < pageCount; i++)
+            _button(
+              context,
+              i + 1,
+              () => onPageChanged(i),
+              active: i == safePage,
+            )
+        else ...[
+          for (var i = 0; i < 3; i++)
+            _button(
+              context,
+              i + 1,
+              () => onPageChanged(i),
+              active: i == safePage,
+            ),
+          _button(context, '...', null),
+          _button(
+            context,
+            pageCount,
+            () => onPageChanged(pageCount - 1),
+            active: safePage == pageCount - 1,
+          ),
+        ],
+        _button(
+          context,
+          Icons.chevron_right_rounded,
+          safePage < pageCount - 1 ? () => onPageChanged(safePage + 1) : null,
+        ),
+      ],
     );
 
     final summary = Text(
@@ -1677,45 +1746,44 @@ class PaginationBar extends StatelessWidget {
     bool active = false,
   }) {
     final colors = semanticColors(context);
+    final colorScheme = Theme.of(context).colorScheme;
     final foreground = active
-        ? colors.heroForeground
+        ? colorScheme.onPrimary
         : onTap == null
             ? colors.disabledText
             : colors.primaryText;
 
-    return AnimatedButtonFeedback(
-      enabled: onTap != null,
-      child: Material(
-        color: active ? colors.heroBackground : colors.cardBackground,
-        surfaceTintColor: Colors.transparent,
+    return Material(
+      color: active ? colorScheme.primary : colors.cardBackground,
+      surfaceTintColor: Colors.transparent,
+      borderRadius: BorderRadius.circular(7),
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(7),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(7),
-          hoverColor: colors.hoverSurface,
-          child: Container(
-            width: 24,
-            height: 24,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(7),
-              border: active ? null : Border.all(color: colors.subtleBorder),
-            ),
-            child: label is IconData
-                ? Icon(
-                    label,
-                    size: 16,
-                    color: foreground,
-                  )
-                : Text(
-                    '$label',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      color: foreground,
-                    ),
-                  ),
+        hoverColor: active ? Colors.transparent : colors.hoverSurface,
+        splashColor: active ? Colors.transparent : null,
+        child: Container(
+          width: 24,
+          height: 24,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(7),
+            border: active ? null : Border.all(color: colors.subtleBorder),
           ),
+          child: label is IconData
+              ? Icon(
+                  label,
+                  size: 16,
+                  color: foreground,
+                )
+              : Text(
+                  '$label',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: foreground,
+                  ),
+                ),
         ),
       ),
     );

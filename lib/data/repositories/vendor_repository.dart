@@ -66,6 +66,37 @@ class VendorRepository {
         administrativeNotes: administrativeNotes,
       );
 
+  Future<void> approveVendorClosure(
+    String id, {
+    required String administrativeNotes,
+  }) =>
+      _controller.approveVendorClosure(
+        id,
+        administrativeNotes: administrativeNotes,
+      );
+
+  Future<void> dismissVendorClosureRequest(
+    String id, {
+    required String administrativeNotes,
+  }) =>
+      _controller.dismissVendorClosureRequest(
+        id,
+        administrativeNotes: administrativeNotes,
+      );
+
+  Future<void> reassignVendorLocation(
+    String id, {
+    required String newLocation,
+    String? newCategory,
+    required String administrativeNotes,
+  }) =>
+      _controller.reassignVendorLocation(
+        id,
+        newLocation: newLocation,
+        newCategory: newCategory,
+        administrativeNotes: administrativeNotes,
+      );
+
   Future<void> updateCustomerAccount(
     String id, {
     required AccountStatus status,

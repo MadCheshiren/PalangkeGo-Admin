@@ -11,7 +11,15 @@ import '../../data/repositories/vendor_repository.dart';
 import '../vendor_applications/verification_dialog.dart';
 
 class RenewalsPage extends ConsumerStatefulWidget {
-  const RenewalsPage({super.key});
+  const RenewalsPage({
+    super.key,
+    this.selectedRenewalId,
+    this.openDetailsOnLoad = false,
+  });
+
+  final String? selectedRenewalId;
+  final bool openDetailsOnLoad;
+
   @override
   ConsumerState<RenewalsPage> createState() => _RenewalsPageState();
 }
@@ -26,6 +34,7 @@ class _RenewalsPageState extends ConsumerState<RenewalsPage> {
   bool _userSelectedTab = false;
   int page = 0;
   late Set<String> _viewedRenewalIds;
+  bool _selectedRenewalOpened = false;
 
   @override
   void initState() {
@@ -35,6 +44,45 @@ class _RenewalsPageState extends ConsumerState<RenewalsPage> {
             .getStringList(_viewedRenewalsPreference)
             ?.toSet() ??
         <String>{};
+    WidgetsBinding.instance.addPostFrameCallback((_) => _openSelectedRenewal());
+  }
+
+  @override
+  void didUpdateWidget(covariant RenewalsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selectedRenewalId != oldWidget.selectedRenewalId ||
+        widget.openDetailsOnLoad != oldWidget.openDetailsOnLoad) {
+      _selectedRenewalOpened = false;
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _openSelectedRenewal(),
+      );
+    }
+  }
+
+  void _openSelectedRenewal() {
+    if (!mounted ||
+        _selectedRenewalOpened ||
+        !widget.openDetailsOnLoad ||
+        widget.selectedRenewalId == null) {
+      return;
+    }
+    RenewalRequest? selected;
+    for (final item in ref.read(renewalsProvider)) {
+      if (item.id == widget.selectedRenewalId) {
+        selected = item;
+        break;
+      }
+    }
+    if (selected == null) return;
+    _selectedRenewalOpened = true;
+    _markRenewalViewed(selected.id);
+    showBlurredDialog(
+      context,
+      (context) => VerificationDialog.renewal(
+        selected!,
+        isHistory: selected.status != RenewalStatus.reviewing,
+      ),
+    );
   }
 
   void _markRenewalViewed(String id) {
@@ -357,7 +405,10 @@ class _RenewalsPageState extends ConsumerState<RenewalsPage> {
                     _markRenewalViewed(v.id);
                     showBlurredDialog(
                       context,
-                      (context) => VerificationDialog.renewal(v),
+                      (context) => VerificationDialog.renewal(
+                        v,
+                        isHistory: history || v.status != RenewalStatus.reviewing,
+                      ),
                     );
                   },
                 ),
@@ -535,36 +586,37 @@ class _Table extends StatelessWidget {
 
     return ScrollableDataTable(
       verticalController: verticalController,
-      minWidth: 1500,
-      columnSpacing: 18,
+      minWidth: 1250,
+      horizontalScroll: MediaQuery.sizeOf(context).width < 1350,
+      columnSpacing: 12,
       emptyState: emptyState,
       columns: [
         const DataColumn(
-          columnWidth: FlexColumnWidth(1.25),
+          columnWidth: FlexColumnWidth(1.05),
           label: Text('RENEWAL ID'),
         ),
         const DataColumn(
-          columnWidth: FlexColumnWidth(1.25),
+          columnWidth: FlexColumnWidth(1.2),
           label: Text('STALL HOLDER'),
         ),
         const DataColumn(
-          columnWidth: FlexColumnWidth(1.35),
+          columnWidth: FlexColumnWidth(1.15),
           label: Text('STALL NAME'),
         ),
         const DataColumn(
-          columnWidth: FlexColumnWidth(0.95),
+          columnWidth: FlexColumnWidth(0.9),
           label: Text('CATEGORY'),
         ),
         DataColumn(
-          columnWidth: const FlexColumnWidth(1.25),
+          columnWidth: const FlexColumnWidth(1.35),
           label: Text(history ? 'EXPIRY DATE' : 'DATE SUBMITTED'),
         ),
         const DataColumn(
-          columnWidth: FlexColumnWidth(1.75),
+          columnWidth: FlexColumnWidth(1.45),
           label: Text('RENEWAL STATUS'),
         ),
         const DataColumn(
-          columnWidth: FlexColumnWidth(0.8),
+          columnWidth: FlexColumnWidth(1.05),
           label: Text('ACTIONS'),
         ),
       ],

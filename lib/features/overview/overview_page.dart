@@ -8,13 +8,14 @@ import '../../core/utils/formatters.dart';
 import '../../core/widgets/admin_shell.dart';
 import '../../core/widgets/admin_widgets.dart';
 import '../../core/widgets/formatted_text.dart';
+import '../../core/widgets/sales_line_chart.dart';
 import '../../data/repositories/mock_repository.dart';
 import '../../models/admin_models.dart';
 import '../../models/app_models.dart';
 import '../announcements/announcement_dialog.dart';
 import '../vendor_applications/verification_dialog.dart';
 
-enum OverviewPanelId { kyc, topSellers, announcements }
+enum OverviewPanelId { kyc, salesChart, topSellers, announcements }
 
 class _PanelState {
   _PanelState({
@@ -60,6 +61,12 @@ class _OverviewPageState extends ConsumerState<OverviewPage> {
         _PanelState(
           id: OverviewPanelId.kyc,
           title: 'Needs Action: KYC Approvals',
+          isFullWidth: true,
+          isExpanded: false,
+        ),
+        _PanelState(
+          id: OverviewPanelId.salesChart,
+          title: 'SALES OVERVIEW',
           isFullWidth: true,
           isExpanded: false,
         ),
@@ -158,6 +165,99 @@ class _OverviewPageState extends ConsumerState<OverviewPage> {
           );
           break;
 
+        case OverviewPanelId.salesChart:
+          headerAction = Tooltip(
+            message: 'View full sales reports',
+            child: OutlinedButton(
+              onPressed: () => context.go('/sales-reports'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: colors.secondaryText,
+                backgroundColor: colors.hoverSurface,
+                side: BorderSide(color: colors.subtleBorder),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                minimumSize: const Size(0, 32),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'View All',
+                    style: GoogleFonts.inter(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      color: colors.secondaryText,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 13,
+                    color: colors.secondaryText,
+                  ),
+                ],
+              ),
+            ),
+          );
+          final today = DateUtils.dateOnly(DateTime.now());
+          final snapshotStart = today.subtract(const Duration(days: 29));
+          final snapshotOrders = data.orders
+              .where((order) =>
+                  order.contributesToSales &&
+                  !order.placedAt.isBefore(snapshotStart))
+              .toList();
+          final snapshot = SalesSummary.fromOrders(snapshotOrders);
+          childWidget = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+                child: Text(
+                  'Last 30 days',
+                  style: TextStyle(fontSize: 11, color: colors.mutedText),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: SizedBox(
+                  height: state.isExpanded ? 260 : 170,
+                  child: SalesLineChart(
+                    orders: snapshotOrders,
+                    startDate: snapshotStart,
+                    endDate: today,
+                    isSales: true,
+                    colors: colors,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _SnapshotMetric(
+                        label: 'NET REVENUE',
+                        value: _shortPeso(snapshot.netRevenue),
+                      ),
+                    ),
+                    Expanded(
+                      child: _SnapshotMetric(
+                        label: 'ORDERS',
+                        value: '${snapshot.totalOrders}',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+          break;
+
         case OverviewPanelId.topSellers:
           headerAction = Tooltip(
             message: 'View sales reports',
@@ -195,15 +295,15 @@ class _OverviewPageState extends ConsumerState<OverviewPage> {
               ),
             ),
           );
-          final now = DateTime.now();
-          final thisMonthOrders = data.orders
-              .where((o) =>
-                  o.placedAt.year == now.year && o.placedAt.month == now.month)
-              .toList();
-          final effectiveOrders =
-              thisMonthOrders.isNotEmpty ? thisMonthOrders : data.orders;
           childWidget = _TopSellers(
-            orders: effectiveOrders,
+            orders: data.orders
+                .where((order) =>
+                    order.contributesToSales &&
+                    !order.placedAt.isBefore(
+                      DateUtils.dateOnly(DateTime.now())
+                          .subtract(const Duration(days: 29)),
+                    ))
+                .toList(),
             limit: state.isExpanded ? 6 : 3,
           );
           break;
@@ -450,7 +550,7 @@ class _ResizablePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = semanticColors(context);
 
-    final headerControls = Row(
+    final headerButtons = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         headerAction,
@@ -488,51 +588,60 @@ class _ResizablePanel extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(width: 6),
-        Draggable<int>(
-          data: index,
-          feedback: Material(
-            color: Colors.transparent,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Opacity(
-                opacity: 0.9,
-                child: Transform.scale(
-                  scale: 1.02,
-                  child: DataPanel(
-                    title: state.title,
-                    titleStyle: GoogleFonts.inter(
-                      color: colors.primaryText,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    headerAction: headerAction,
-                    child: childWidget,
-                  ),
+      ],
+    );
+
+    final dragHandle = Draggable<int>(
+      data: index,
+      feedback: Material(
+        color: Colors.transparent,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Opacity(
+            opacity: 0.9,
+            child: Transform.scale(
+              scale: 1.02,
+              child: DataPanel(
+                title: state.title,
+                titleStyle: GoogleFonts.inter(
+                  color: colors.primaryText,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
                 ),
-              ),
-            ),
-          ),
-          child: Tooltip(
-            message: 'Drag handle: Click and drag to reorder panel',
-            child: MouseRegion(
-              cursor: SystemMouseCursors.grab,
-              child: Container(
-                padding: const EdgeInsets.all(5),
-                decoration: BoxDecoration(
-                  color: colors.hoverSurface,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: colors.subtleBorder),
-                ),
-                child: Icon(
-                  Icons.drag_indicator_rounded,
-                  size: 18,
-                  color: colors.secondaryText,
-                ),
+                headerAction: headerAction,
+                child: childWidget,
               ),
             ),
           ),
         ),
+      ),
+      child: Tooltip(
+        message: 'Drag handle: Click and drag to reorder panel',
+        child: MouseRegion(
+          cursor: SystemMouseCursors.grab,
+          child: Container(
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(
+              color: colors.hoverSurface,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: colors.subtleBorder),
+            ),
+            child: Icon(
+              Icons.drag_indicator_rounded,
+              size: 18,
+              color: colors.secondaryText,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final headerControls = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        headerButtons,
+        const SizedBox(width: 6),
+        dragHandle,
       ],
     );
 
@@ -579,7 +688,15 @@ class _OverviewHero extends ConsumerWidget {
     final profile = ref.watch(adminProfileProvider);
     final data = ref.watch(appDataProvider);
     final colors = semanticColors(context);
-    final sales = SalesSummary.fromOrders(data.orders);
+    // Keep the hero metrics on the same explicit period as Sales Overview.
+    final today = DateUtils.dateOnly(DateTime.now());
+    final salesWindowStart = today.subtract(const Duration(days: 29));
+    final sales = SalesSummary.fromOrders(
+      data.orders
+          .where((order) =>
+              order.contributesToSales &&
+              !order.placedAt.isBefore(salesWindowStart)),
+    );
     final activeVendors = data.vendors
         .where((vendor) => vendor.status == AccountStatus.active)
         .length;
@@ -595,7 +712,7 @@ class _OverviewHero extends ConsumerWidget {
         value: '$activeVendors',
         label: 'Active Stall Holders',
         icon: Icons.storefront_rounded,
-        accent: const Color(0xFF3B82F6),
+        accent: const Color(0xFF10B981),
         onTap: () => context.go('/accounts'),
       ),
       MetricCardData(
@@ -607,24 +724,24 @@ class _OverviewHero extends ConsumerWidget {
       ),
       MetricCardData(
         value: '${sales.totalOrders}',
-        label: 'Total Orders',
-        icon: Icons.shopping_bag_outlined,
-        accent: const Color(0xFFEF4444),
+        label: '30-Day Orders',
+        icon: Icons.receipt_long_outlined,
+        accent: const Color(0xFF3B82F6),
         onTap: () => context.go('/sales-reports'),
       ),
       MetricCardData(
         value: _shortPeso(sales.netRevenue),
-        label: 'Net Revenue',
-        icon: Icons.payments_outlined,
-        accent: const Color(0xFF10B981),
+        label: '30-Day Net Revenue',
+        icon: Icons.account_balance_wallet_outlined,
+        accent: const Color(0xFF059669),
         onTap: () => context.go('/sales-reports'),
       ),
       MetricCardData(
         value: '$activeCustomers',
         label: 'Active Customers',
-        icon: Icons.trending_up_rounded,
-        accent: const Color(0xFF8B5CF6),
-        onTap: () => context.go('/accounts'),
+        icon: Icons.people_outline_rounded,
+        accent: const Color(0xFF3B82F6),
+        onTap: () => context.go('/accounts?tab=customers'),
       ),
     ];
     final hour = DateTime.now().hour;
@@ -733,6 +850,41 @@ String _shortPeso(double value) {
 }
 
 String _fmtMoney(num value) => '₱${NumberFormat('#,##0.00').format(value)}';
+
+class _SnapshotMetric extends StatelessWidget {
+  const _SnapshotMetric({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = semanticColors(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            color: colors.mutedText,
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w800,
+            color: colors.primaryText,
+          ),
+        ),
+      ],
+    );
+  }
+}
 
 class _ApprovalTable extends StatelessWidget {
   const _ApprovalTable({required this.items});

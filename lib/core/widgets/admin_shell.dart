@@ -96,37 +96,34 @@ class _TopNavigationState extends ConsumerState<_TopNavigation> {
         ),
       ),
       child: isMobile
-          ? Row(
+          ? Stack(
+              alignment: Alignment.center,
               children: [
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: const AppLogo(
-                      dark: true,
-                      compact: true,
-                      showTagline: false,
-                      showAdminBadge: false,
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Builder(
+                    builder: (context) => IconButton(
+                      tooltip: 'Open navigation',
+                      onPressed: () => Scaffold.of(context).openDrawer(),
+                      icon: const Icon(Icons.menu_rounded, color: Colors.white),
                     ),
                   ),
                 ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Builder(
-                      builder: (context) => IconButton(
-                        tooltip: 'Open navigation',
-                        onPressed: () => Scaffold.of(context).openDrawer(),
-                        icon:
-                            const Icon(Icons.menu_rounded, color: Colors.white),
-                      ),
-                    ),
-                    const _ThemeToggleButton(),
-                    const SizedBox(width: 4),
-                    const NotificationBell(),
-                    const SizedBox(width: 6),
-                    const AdminProfileMenu(compact: true),
-                  ],
+                const Align(
+                  alignment: Alignment.center,
+                  child: AppLogo(
+                    dark: true,
+                    compact: true,
+                    showTagline: false,
+                    showAdminBadge: false,
+                  ),
+                ),
+                const Align(
+                  alignment: Alignment.centerRight,
+                  child: AdminProfileMenu(
+                    compact: true,
+                    showMobileActions: true,
+                  ),
                 ),
               ],
             )
@@ -140,42 +137,47 @@ class _TopNavigationState extends ConsumerState<_TopNavigation> {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Listener(
-                    onPointerSignal: (pointerSignal) {
-                      if (pointerSignal is PointerScrollEvent &&
-                          _scrollController.hasClients) {
-                        final target = (_scrollController.offset +
-                                pointerSignal.scrollDelta.dy)
-                            .clamp(0.0,
-                                _scrollController.position.maxScrollExtent);
-                        _scrollController.jumpTo(target);
-                      }
-                    },
-                    child: ScrollConfiguration(
-                      behavior: ScrollConfiguration.of(context).copyWith(
-                        dragDevices: {
-                          ui.PointerDeviceKind.touch,
-                          ui.PointerDeviceKind.mouse,
-                          ui.PointerDeviceKind.trackpad,
-                        },
-                        scrollbars: false,
-                      ),
-                      child: SingleChildScrollView(
-                        controller: _scrollController,
-                        scrollDirection: Axis.horizontal,
-                        physics: const BouncingScrollPhysics(),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            for (final item in AdminShell.navItems)
-                              _NavItem(
-                                label: item.$2,
-                                tooltip: item.$1,
-                                path: item.$3,
-                                icon: item.$4,
-                                active: widget.current == item.$3,
-                              ),
-                          ],
+                  child: Align(
+                    alignment: Alignment.center,
+                    child: Listener(
+                      onPointerSignal: (pointerSignal) {
+                        if (pointerSignal is PointerScrollEvent &&
+                            _scrollController.hasClients) {
+                          final target = (_scrollController.offset +
+                                  pointerSignal.scrollDelta.dy)
+                              .clamp(
+                                  0.0,
+                                  _scrollController
+                                      .position.maxScrollExtent);
+                          _scrollController.jumpTo(target);
+                        }
+                      },
+                      child: ScrollConfiguration(
+                        behavior: ScrollConfiguration.of(context).copyWith(
+                          dragDevices: {
+                            ui.PointerDeviceKind.touch,
+                            ui.PointerDeviceKind.mouse,
+                            ui.PointerDeviceKind.trackpad,
+                          },
+                          scrollbars: false,
+                        ),
+                        child: SingleChildScrollView(
+                          controller: _scrollController,
+                          scrollDirection: Axis.horizontal,
+                          physics: const BouncingScrollPhysics(),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              for (final item in AdminShell.navItems)
+                                _NavItem(
+                                  label: item.$2,
+                                  tooltip: item.$1,
+                                  path: item.$3,
+                                  icon: item.$4,
+                                  active: widget.current == item.$3,
+                                ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -216,7 +218,6 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = semanticColors(context);
-    final activeColor = active ? colors.activeNavigationText : colors.heroMuted;
 
     final itemWidget = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
@@ -234,7 +235,7 @@ class _NavItem extends StatelessWidget {
               }
             },
             borderRadius: BorderRadius.circular(18),
-            hoverColor: colors.navigationHover,
+            hoverColor: active ? Colors.transparent : colors.navigationHover,
             splashColor: colors.activeNavigation.withValues(alpha: .16),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
@@ -244,13 +245,13 @@ class _NavItem extends StatelessWidget {
                   Icon(
                     icon,
                     size: 16,
-                    color: activeColor,
+                    color: active ? colors.activeNavigationText : colors.heroMuted,
                   ),
                   const SizedBox(width: 5),
                   Text(
                     label,
                     style: GoogleFonts.inter(
-                      color: activeColor,
+                      color: active ? colors.activeNavigationText : colors.heroMuted,
                       fontSize: 13,
                       fontWeight: active ? FontWeight.w700 : FontWeight.w500,
                     ),
@@ -263,9 +264,6 @@ class _NavItem extends StatelessWidget {
       ),
     );
 
-    if (tooltip != null && tooltip != label) {
-      return Tooltip(message: tooltip!, child: itemWidget);
-    }
     return itemWidget;
   }
 }
@@ -375,8 +373,9 @@ class _AccountSettingsDialogState
           password: password.isEmpty ? null : password,
         );
     if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
     Navigator.of(context).pop();
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.showSnackBar(
       const SnackBar(content: Text('Account settings updated.')),
     );
   }
@@ -452,11 +451,18 @@ class _AccountSettingsDialogState
           ),
           FilledButton(
             onPressed: _saving ? null : _save,
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF059669),
+              foregroundColor: Colors.white,
+            ),
             child: _saving
                 ? const SizedBox(
                     width: 16,
                     height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
                   )
                 : const Text('Save changes'),
           ),

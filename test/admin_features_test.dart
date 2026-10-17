@@ -68,12 +68,24 @@ void main() {
     expect(order.netRevenue, 210);
     expect(order.quantity, 2);
     expect(order.categories, 'GRAINS');
+
+    final summary = SalesSummary.fromOrders([order]);
+    expect(summary.grossSales, order.total);
+    expect(summary.netRevenue, order.netRevenue);
   });
 
   test('sales summary aggregates seeded order data', () {
     final orders = seedOrders();
     final summary = SalesSummary.fromOrders(orders);
 
+    expect(
+      orders.map((order) => order.id),
+      everyElement(matches(RegExp(r'^\d{6}-\d{2}$'))),
+    );
+    expect(
+      orders.map((order) => order.id.substring(7)),
+      List.generate(orders.length, (index) => '${index + 1}'.padLeft(2, '0')),
+    );
     expect(summary.totalOrders, orders.length);
     expect(summary.grossSales, greaterThan(0));
     expect(summary.netRevenue, greaterThan(0));
@@ -395,5 +407,156 @@ void main() {
         .toList();
     expect(reopenedRequestsTab.map((r) => r.id), contains(pendingRenewal.id));
     expect(reopenedRequestsTab.length, 6);
+  });
+
+  test('vendor closure request workflow and active order guard', () async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final controller = AppDataController(prefs, firebaseEnabled: false);
+
+    // Vendor with seeded closure request
+    final vendorWithRequest = controller.state.vendors.firstWhere(
+      (v) => v.closureRequestedAt != null,
+    );
+    expect(vendorWithRequest.closureReason, isNotEmpty);
+
+    // Guard test: create an active order for this vendor
+    final activeOrder = Order(
+      id: 'ORD-TEST-ACTIVE',
+      transactionId: vendorWithRequest.id,
+      placedAt: DateTime.now(),
+      customerName: 'Test Customer',
+      vendorName: vendorWithRequest.name,
+      stallName: 'Test Stall',
+      items: const [
+        OrderItem(name: 'Item', category: 'Meat', quantity: 1, unitPrice: 100),
+      ],
+      discounts: 0,
+      deliveryFee: 0,
+      platformFee: 0,
+      refundAmount: 0,
+      paymentMethod: PaymentMethod.cashOnDelivery,
+      paymentStatus: PaymentStatus.pending,
+      status: OrderStatus.processing,
+    );
+    controller.state = controller.state.copyWith(
+      orders: [activeOrder, ...controller.state.orders],
+    );
+
+    // Attempting closure should throw StateError due to active orders
+    expect(
+      () => controller.approveVendorClosure(
+        vendorWithRequest.id,
+        administrativeNotes: 'Closing stall',
+      ),
+      throwsStateError,
+    );
+
+    // Remove active order (or mark completed)
+    controller.state = controller.state.copyWith(
+      orders: controller.state.orders
+          .where((o) => o.id != 'ORD-TEST-ACTIVE')
+          .toList(),
+    );
+
+    // Now approving closure succeeds
+    await controller.approveVendorClosure(
+      vendorWithRequest.id,
+      administrativeNotes: 'Closure approved by admin upon vendor request',
+    );
+
+    final updatedVendor = controller.state.vendors.firstWhere(
+      (v) => v.id == vendorWithRequest.id,
+    );
+    expect(updatedVendor.status, AccountStatus.blocked);
+    expect(updatedVendor.closureRequestedAt, isNull);
+    expect(updatedVendor.blockedReason, contains('Stall closed upon vendor request'));
+
+    // Check audit trail
+    final audit = controller.state.auditLogs.first;
+    expect(audit.action, AuditAction.blockAccount);
+    expect(audit.targetEntityId, vendorWithRequest.id);
+  });
+
+  test('dismissing vendor closure request keeps vendor active and clears request', () async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final controller = AppDataController(prefs, firebaseEnabled: false);
+
+    final vendorWithRequest = controller.state.vendors.firstWhere(
+      (v) => v.closureRequestedAt != null,
+    );
+
+    await controller.dismissVendorClosureRequest(
+      vendorWithRequest.id,
+      administrativeNotes: 'Vendor retracted request',
+    );
+
+    final updated = controller.state.vendors.firstWhere(
+      (v) => v.id == vendorWithRequest.id,
+    );
+    expect(updated.closureRequestedAt, isNull);
+    expect(updated.status, AccountStatus.active);
+
+    final audit = controller.state.auditLogs.first;
+    expect(audit.action, AuditAction.editAccountStatus);
+    expect(audit.previousValue, 'Closure Requested');
+  });
+
+  test('reassigning stall location updates location, category, and audit trail', () async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final controller = AppDataController(prefs, firebaseEnabled: false);
+
+    final vendor = controller.state.vendors.first;
+    final oldLocation = vendor.location;
+
+    await controller.reassignVendorLocation(
+      vendor.id,
+      newLocation: 'Stall #99, Dry Goods Section',
+      newCategory: 'Dry Goods',
+      administrativeNotes: 'Approved relocation permit #204',
+    );
+
+    final updated = controller.state.vendors.firstWhere((v) => v.id == vendor.id);
+    expect(updated.location, 'Stall #99, Dry Goods Section');
+    expect(updated.stallType, 'Dry Goods');
+
+    final audit = controller.state.auditLogs.first;
+    expect(audit.action, AuditAction.editAccountStatus);
+    expect(audit.previousValue, contains(oldLocation));
+    expect(audit.newValue, contains('Stall #99, Dry Goods Section (Dry Goods)'));
+  });
+
+  test('seeded vendors contain relocation request and archived/closed stall samples', () async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final controller = AppDataController(prefs, firebaseEnabled: false);
+
+    final relocationVendors = controller.state.vendors.where((v) => v.relocationRequestedAt != null);
+    expect(relocationVendors.length, greaterThanOrEqualTo(1));
+    final sampleRelocation = relocationVendors.first;
+    expect(sampleRelocation.relocationTargetLocation, isNotNull);
+    expect(sampleRelocation.relocationReason, isNotNull);
+
+    final closedStalls = controller.state.vendors.where(
+      (v) => v.status == AccountStatus.blocked &&
+          (v.blockedReason?.contains('Stall closed') == true),
+    );
+    expect(closedStalls.length, greaterThanOrEqualTo(1));
+    final sampleClosed = closedStalls.first;
+    expect(sampleClosed.location, contains('Archived'));
+    expect(sampleClosed.blockedAt, isNotNull);
+    expect(sampleClosed.blockedBy, isNotNull);
+
+    // Verify reopening closed stall restores account to active
+    await controller.updateVendorAccount(
+      sampleClosed.id,
+      status: AccountStatus.active,
+      administrativeNotes: 'Stall lease reopened per application',
+    );
+    final reopened = controller.state.vendors.firstWhere((v) => v.id == sampleClosed.id);
+    expect(reopened.status, AccountStatus.active);
+    expect(reopened.blockedReason, isNull);
   });
 }

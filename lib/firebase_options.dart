@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, TargetPlatform;
 
 /// PLACEHOLDER — replace by running `flutterfire configure` in this project.
-///
 /// In demo mode (`flutter run` without FIREBASE_ENABLED) this file is never
 /// used. In Firebase mode with placeholders still present, startup fails
 /// closed with a clear message instead of silently misbehaving.

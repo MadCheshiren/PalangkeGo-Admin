@@ -128,18 +128,30 @@ class _AnnouncementHistoryPageState
               label: 'Total Announcements',
               icon: Icons.campaign_outlined,
               accent: const Color(0xFF10B981),
+              onTap: () {
+                setState(() => selectedStatus = 'All Statuses');
+                _resetPagination();
+              },
             ),
             MetricCardData(
               value: '$deliveredCount',
               label: 'Delivered Notices',
               icon: Icons.mark_email_read_outlined,
               accent: const Color(0xFF3B82F6),
+              onTap: () {
+                setState(() => selectedStatus = 'Sent');
+                _resetPagination();
+              },
             ),
             MetricCardData(
               value: '$draftOrQueuedCount',
               label: 'Drafts & Queued',
               icon: Icons.edit_note_rounded,
               accent: const Color(0xFFF59E0B),
+              onTap: () {
+                setState(() => selectedStatus = 'Draft');
+                _resetPagination();
+              },
             ),
           ],
         ),
@@ -505,6 +517,7 @@ class _AnnouncementHistoryPageState
       allAnnouncements: allAnnouncements,
       filteredAnnouncements: filteredAnnouncements,
       activeFilters: filterLabels.join(' | '),
+      audience: selectedAudience,
     );
 
     await AdminExportService.export(

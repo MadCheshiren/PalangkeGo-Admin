@@ -111,29 +111,52 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     ],
                   ),
                 )
-              : SizedBox.expand(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(flex: 52, child: _market(loginContext, false)),
-                      Expanded(flex: 48, child: _loginForm(loginContext)),
-                    ],
-                  ),
-                );
+              : _desktopLoginBody(loginContext);
           return Scaffold(
             backgroundColor: const Color(0xFFF8FAFC),
             body: Form(
               key: formKey,
-              child: Column(
-                children: [
-                  const _Header(dark: false),
-                  Expanded(child: body),
-                  const _Footer(),
-                ],
-              ),
+              child: body,
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _desktopLoginBody(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) => Stack(
+        fit: StackFit.expand,
+        children: [
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              color: Color(0xFFF6FBF8),
+              image: DecorationImage(
+                image: AssetImage('assets/images/login_right_decor.png'),
+                fit: BoxFit.cover,
+                alignment: Alignment.centerRight,
+              ),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: constraints.maxWidth * .52,
+            child: ClipPath(
+              clipper: const _MarketDiagonalClipper(),
+              child: _market(context, false),
+            ),
+          ),
+          Positioned(
+            left: constraints.maxWidth * .48,
+            top: 0,
+            right: 0,
+            bottom: 0,
+            child: _loginForm(context),
+          ),
+        ],
       ),
     );
   }
@@ -175,10 +198,46 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               ),
             ),
           ),
+          Positioned(
+            top: 0,
+            left: 0,
+            child: Container(
+              padding: EdgeInsets.fromLTRB(
+                compact ? 24 : 44,
+                compact ? 18 : 28,
+                compact ? 24 : 34,
+                compact ? 14 : 20,
+              ),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [
+                    const Color(0xFF061F19).withValues(alpha: .58),
+                    const Color(0xFF0B4A3B).withValues(alpha: .38),
+                    const Color(0xFF12342B).withValues(alpha: 0),
+                  ],
+                ),
+                borderRadius: const BorderRadius.only(
+                  bottomRight: Radius.circular(16),
+                ),
+              ),
+              child: Transform.scale(
+                scale: compact ? 1 : 1.06,
+                alignment: Alignment.topLeft,
+                child: AppLogo(
+                  dark: true,
+                  compact: compact,
+                  showTagline: true,
+                  showAdminBadge: true,
+                ),
+              ),
+            ),
+          ),
           // Promotional text aligned at the bottom with high contrast and readable hierarchy
           Positioned(
             left: 0,
-            right: 0,
+            right: compact ? 0 : width * .09,
             bottom: 0,
             child: Padding(
               padding: EdgeInsets.fromLTRB(
@@ -214,22 +273,69 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     ),
                   ),
                   SizedBox(height: compact ? 12 : 18),
-                  Text(
-                    'Skip the Roam,\nOrder from Home.',
-                    style: GoogleFonts.radley(
-                      color: Colors.white,
-                      fontSize: headlineSize,
-                      height: 1.18,
-                      fontWeight: FontWeight.w700,
-                      shadows: [
-                        Shadow(
-                          color: Colors.black.withValues(alpha: 0.65),
-                          offset: const Offset(0, 2),
-                          blurRadius: 10,
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: 'Skip the Roam,\nOrder from ',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: Colors.white,
+                            fontSize: headlineSize,
+                            height: 1.16,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -1.1,
+                          ),
+                        ),
+                        TextSpan(
+                          text: 'Home.',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: const Color(0xFF39E5AD),
+                            fontSize: headlineSize,
+                            height: 1.16,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -1.1,
+                          ),
                         ),
                       ],
                     ),
                   ),
+                  if (!compact && width >= 1200) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      'A safer, faster, and more convenient way to\naccess fresh market goods.',
+                      style: GoogleFonts.inter(
+                        color: Colors.white.withValues(alpha: .9),
+                        fontSize: 16,
+                        height: 1.45,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _marketFeature(
+                            Icons.shopping_cart_outlined,
+                            'Support Local\nStall Holders',
+                          ),
+                        ),
+                        const SizedBox(width: 18),
+                        Expanded(
+                          child: _marketFeature(
+                            Icons.eco_outlined,
+                            'Access Fresh\nMarket Goods',
+                          ),
+                        ),
+                        const SizedBox(width: 18),
+                        Expanded(
+                          child: _marketFeature(
+                            Icons.groups_2_outlined,
+                            'Build a Stronger\nCommunity',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -238,6 +344,35 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       ),
     );
   }
+
+  Widget _marketFeature(IconData icon, String label) => Row(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: const Color(0xFF047857).withValues(alpha: .38),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: const Color(0xFF34D399).withValues(alpha: .22),
+              ),
+            ),
+            child: Icon(icon, size: 31, color: const Color(0xFF5EEAD4)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              label,
+              style: GoogleFonts.inter(
+                color: Colors.white.withValues(alpha: .92),
+                fontSize: 14,
+                height: 1.35,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      );
 
   Widget _loginForm(BuildContext context) {
     final colors = semanticColors(context);
@@ -257,19 +392,52 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             letterSpacing: -0.5,
           ),
         ),
-        const SizedBox(height: 5),
+        const SizedBox(height: 7),
         Text(
-          'Authorized personnel only',
+          'Sign in to manage stalls, orders, renewals,\ncomplaints, and more.',
           textAlign: TextAlign.center,
           style: GoogleFonts.inter(
-            fontSize: 12.5,
+            fontSize: 13,
+            height: 1.45,
             fontWeight: FontWeight.w500,
             color: colors.secondaryText,
           ),
         ),
-        const SizedBox(height: 16),
-        Center(child: _ModeBadge(firebase: ref.read(firebaseEnabledProvider))),
-        const SizedBox(height: 26),
+        const SizedBox(height: 14),
+        Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: colors.successContainer,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: colors.success.withValues(alpha: .25)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.verified_user_outlined,
+                  size: 16,
+                  color: colors.success,
+                ),
+                const SizedBox(width: 7),
+                Flexible(
+                  child: Text(
+                    'Authorized personnel only',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: colors.success,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 22),
         Text(
           'Email Address',
           style: GoogleFonts.inter(
@@ -588,16 +756,46 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         ),
                       ],
                     )
-                  : Text(
-                      'Log In',
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.3,
-                      ),
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.login_rounded, size: 19),
+                        const SizedBox(width: 9),
+                        Text(
+                          'Log In',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ],
                     ),
             ),
           ),
+        ),
+        const SizedBox(height: 18),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.lock_outline_rounded,
+              size: 15,
+              color: colors.mutedText,
+            ),
+            const SizedBox(width: 7),
+            Flexible(
+              child: Text(
+                'Your data is protected and secure.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w500,
+                  color: colors.mutedText,
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -610,17 +808,17 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             : const EdgeInsets.symmetric(horizontal: 24, vertical: 28));
 
     final card = Container(
-      constraints: const BoxConstraints(maxWidth: 440),
+      constraints: const BoxConstraints(maxWidth: 480),
       padding: cardPadding,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 28,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
@@ -628,7 +826,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     );
 
     final panel = Container(
-      color: const Color(0xFFF8FAFC),
+      color: isDesktop ? Colors.transparent : const Color(0xFFF8FAFC),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
       child: Center(
         child: isDesktop
@@ -726,6 +924,21 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   }
 }
 
+class _MarketDiagonalClipper extends CustomClipper<Path> {
+  const _MarketDiagonalClipper();
+
+  @override
+  Path getClip(Size size) => Path()
+    ..moveTo(0, 0)
+    ..lineTo(size.width, 0)
+    ..lineTo(size.width * .83, size.height)
+    ..lineTo(0, size.height)
+    ..close();
+
+  @override
+  bool shouldReclip(covariant _MarketDiagonalClipper oldClipper) => false;
+}
+
 class _LoginSlideshow extends StatefulWidget {
   const _LoginSlideshow({required this.images});
 
@@ -806,8 +1019,8 @@ class _LoginSlideshowState extends State<_LoginSlideshow> {
   }
 }
 
-class _Header extends StatelessWidget {
-  const _Header({required this.dark});
+class Header extends StatelessWidget {
+  const Header({super.key, required this.dark});
   final bool dark;
 
   void _showInfoDialog(BuildContext context, String title, String content) {
@@ -1026,7 +1239,6 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = semanticColors(context);
-    final bg = dark ? colors.heroBackground : Colors.white;
     final screenWidth = MediaQuery.sizeOf(context).width;
     final horizontalPad =
         screenWidth < 400 ? 10.0 : (screenWidth < 768 ? 16.0 : 36.0);
@@ -1036,22 +1248,9 @@ class _Header extends StatelessWidget {
       height: 72,
       width: double.infinity,
       padding: EdgeInsets.symmetric(horizontal: horizontalPad),
-      decoration: BoxDecoration(
-        color: bg,
-        border: Border(
-          bottom: BorderSide(
-            color: dark ? colors.borderOnHero : colors.subtleBorder,
-          ),
-        ),
-      ),
+      color: Colors.transparent,
       child: Row(
         children: [
-          AppLogo(
-            dark: dark,
-            compact: screenWidth < 768,
-            showTagline: screenWidth >= 900,
-            showAdminBadge: screenWidth >= 440,
-          ),
           const Spacer(),
           if (!isCompact)
             SingleChildScrollView(
@@ -1174,8 +1373,8 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _Footer extends StatelessWidget {
-  const _Footer();
+class Footer extends StatelessWidget {
+  const Footer({super.key});
 
   void _showInfo(BuildContext context, String title, String content) {
     final colors = semanticColors(context);
@@ -1323,8 +1522,8 @@ class _Footer extends StatelessWidget {
 
 /// Honest mode indicator — demo (seeded data) vs live Firebase. Civic
 /// clarity over decoration: a quiet pill, no glass, no gradients.
-class _ModeBadge extends StatelessWidget {
-  const _ModeBadge({required this.firebase});
+class ModeBadge extends StatelessWidget {
+  const ModeBadge({super.key, required this.firebase});
 
   final bool firebase;
 

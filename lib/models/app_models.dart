@@ -75,6 +75,11 @@ class Vendor {
     this.blockedFromReportId,
     this.blockedAt,
     this.blockedBy,
+    this.closureRequestedAt,
+    this.closureReason,
+    this.relocationRequestedAt,
+    this.relocationTargetLocation,
+    this.relocationReason,
   });
 
   final String id;
@@ -93,6 +98,11 @@ class Vendor {
   final String? blockedFromReportId;
   final DateTime? blockedAt;
   final String? blockedBy;
+  final DateTime? closureRequestedAt;
+  final String? closureReason;
+  final DateTime? relocationRequestedAt;
+  final String? relocationTargetLocation;
+  final String? relocationReason;
 
   Vendor copyWith({
     AccountStatus? status,
@@ -101,16 +111,25 @@ class Vendor {
     String? blockedFromReportId,
     DateTime? blockedAt,
     String? blockedBy,
+    String? location,
+    String? stallType,
+    DateTime? closureRequestedAt,
+    String? closureReason,
+    DateTime? relocationRequestedAt,
+    String? relocationTargetLocation,
+    String? relocationReason,
     bool clearBlockDetails = false,
+    bool clearClosureRequest = false,
+    bool clearRelocationRequest = false,
   }) =>
       Vendor(
         id: id,
         name: name,
         email: email,
-        stallType: stallType,
+        stallType: stallType ?? this.stallType,
         registeredAt: registeredAt,
         status: status ?? this.status,
-        location: location,
+        location: location ?? this.location,
         orders: orders,
         transactions: transactions,
         phone: phone,
@@ -123,6 +142,21 @@ class Vendor {
             : blockedFromReportId ?? this.blockedFromReportId,
         blockedAt: clearBlockDetails ? null : blockedAt ?? this.blockedAt,
         blockedBy: clearBlockDetails ? null : blockedBy ?? this.blockedBy,
+        closureRequestedAt: clearClosureRequest
+            ? null
+            : closureRequestedAt ?? this.closureRequestedAt,
+        closureReason: clearClosureRequest
+            ? null
+            : closureReason ?? this.closureReason,
+        relocationRequestedAt: clearRelocationRequest
+            ? null
+            : relocationRequestedAt ?? this.relocationRequestedAt,
+        relocationTargetLocation: clearRelocationRequest
+            ? null
+            : relocationTargetLocation ?? this.relocationTargetLocation,
+        relocationReason: clearRelocationRequest
+            ? null
+            : relocationReason ?? this.relocationReason,
       );
 }
 
