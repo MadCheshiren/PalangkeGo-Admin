@@ -32,7 +32,11 @@ class AppConfig {
         ? rawUrl
         : (hasBackend ? 'https://jvpplxlcucuzmbtbmtah.supabase.co' : '');
 
-    final supabaseAnonKey = rawAnonKey.isNotEmpty
+    final isAnonKeyValidJwt = rawAnonKey.isNotEmpty &&
+        rawAnonKey.split('.').length == 3 &&
+        !rawAnonKey.contains('--dart-define');
+
+    final supabaseAnonKey = isAnonKeyValidJwt
         ? rawAnonKey
         : (hasBackend
             ? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp2cHBseGxjdWN1em1idGJtdGFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxMjIyNTUsImV4cCI6MjEwMjY5ODI1NX0.FrYvHhZjARj-XZNC1ZgxfVa1ixJQsuMTkRRMTxCamw0'

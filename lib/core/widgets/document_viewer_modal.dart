@@ -1,8 +1,10 @@
+// ignore_for_file: deprecated_member_use, unused_element, unused_field
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../theme/theme_extensions.dart';
 import '../utils/formatters.dart';
+import '../utils/platform_file_saver.dart';
 import '../widgets/admin_widgets.dart';
 import '../../models/app_models.dart';
 
@@ -25,6 +27,12 @@ class DocumentViewerModal extends StatefulWidget {
 }
 
 class _DocumentViewerModalState extends State<DocumentViewerModal> {
+  void _openOrDownloadDocument(KycDocument doc, {bool download = false}) {
+    final url = doc.fileUrl ?? doc.assetPath ?? '';
+    if (url.isEmpty) return;
+    openOrDownloadUrl(url, filename: doc.filename, download: download);
+  }
+
   late int currentIndex;
   final TransformationController _transformationController =
       TransformationController();
@@ -355,6 +363,22 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
               ],
             ),
           ),
+          OutlinedButton.icon(
+            onPressed: () => _openOrDownloadDocument(doc),
+            icon: const Icon(Icons.open_in_new_rounded, size: 16),
+            label: const Text('Open in Browser', style: TextStyle(fontSize: 12)),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              side: BorderSide(color: colors.subtleBorder),
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            onPressed: () => _openOrDownloadDocument(doc, download: true),
+            icon: const Icon(Icons.download_rounded, size: 20),
+            tooltip: 'Download File',
+          ),
+          const SizedBox(width: 4),
           IconButton(
             onPressed: () => Navigator.pop(context),
             icon: const Icon(Icons.close_rounded),
@@ -429,6 +453,39 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
       if (!hasBack) {
         return _buildMissingBackSidePlaceholder(context, doc);
       }
+    }
+
+    final targetUrl = (isGovId && _idSide == 'back')
+        ? (doc.idBackUrl ?? doc.fileUrl)
+        : (doc.idFrontUrl ?? doc.fileUrl);
+
+    if (targetUrl != null &&
+        targetUrl.isNotEmpty &&
+        (targetUrl.startsWith('http://') || targetUrl.startsWith('https://'))) {
+      return InteractiveViewer(
+        transformationController: _transformationController,
+        minScale: 0.8,
+        maxScale: 4.0,
+        child: Center(
+          child: Image.network(
+            targetUrl,
+            fit: BoxFit.contain,
+            loadingBuilder: (context, child, progress) {
+              if (progress == null) return child;
+              return Center(
+                child: CircularProgressIndicator(
+                  value: progress.expectedTotalBytes != null
+                      ? progress.cumulativeBytesLoaded /
+                          progress.expectedTotalBytes!
+                      : null,
+                ),
+              );
+            },
+            errorBuilder: (_, __, ___) =>
+                _buildGovernmentIdCardImage(doc, isFront: _idSide == 'front'),
+          ),
+        ),
+      );
     }
 
     final targetAsset = (isGovId && _idSide == 'back')
@@ -770,160 +827,116 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
   }
 
   Widget _buildPdfViewer(BuildContext context, KycDocument doc) {
-    final isMayorsPermit = doc.name.toLowerCase().contains('mayor') ||
-        doc.filename.toLowerCase().contains('mayor');
-    final isSanitary = doc.name.toLowerCase().contains('sanitary') ||
-        doc.filename.toLowerCase().contains('sanitary');
-    final isMarketClearance = doc.name.toLowerCase().contains('market') ||
-        doc.filename.toLowerCase().contains('clearance');
-
-    final totalPages =
-        (isMayorsPermit || isSanitary || isMarketClearance) ? 1 : 2;
-
-    return Column(
-      children: [
-        // Real PDF Viewer Toolbar
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          color: const Color(0xFF1E293B),
-          child: Row(
-            children: [
-              const Icon(Icons.picture_as_pdf_rounded,
-                  color: Color(0xFFEF4444), size: 20),
-              const SizedBox(width: 10),
-              Text(
-                doc.filename,
-                style: GoogleFonts.inter(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEF4444).withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: const Text(
-                  'PDF VIEW',
-                  style: TextStyle(
-                    color: Color(0xFFFCA5A5),
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              // Page controls
-              Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.chevron_left_rounded,
-                        color: Colors.white, size: 20),
-                    onPressed: _pdfCurrentPage > 1
-                        ? () => setState(() => _pdfCurrentPage--)
-                        : null,
-                    tooltip: 'Previous Page',
-                  ),
-                  Text(
-                    'Page $_pdfCurrentPage of $totalPages',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.chevron_right_rounded,
-                        color: Colors.white, size: 20),
-                    onPressed: _pdfCurrentPage < totalPages
-                        ? () => setState(() => _pdfCurrentPage++)
-                        : null,
-                    tooltip: 'Next Page',
-                  ),
-                ],
-              ),
-              const VerticalDivider(
-                  color: Colors.white24, indent: 6, endIndent: 6),
-              // Zoom controls
-              Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.remove_circle_outline_rounded,
-                        color: Colors.white, size: 18),
-                    onPressed: _zoomOut,
-                    tooltip: 'Zoom Out',
-                  ),
-                  Text(
-                    '${(_currentScale * 100).toInt()}%',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.add_circle_outline_rounded,
-                        color: Colors.white, size: 18),
-                    onPressed: _zoomIn,
-                    tooltip: 'Zoom In',
-                  ),
-                  TextButton(
-                    onPressed: _resetZoom,
-                    child: const Text(
-                      'Reset',
-                      style: TextStyle(color: Colors.white70, fontSize: 11),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+    final colors = semanticColors(context);
+    return Center(
+      child: Container(
+        width: 580,
+        padding: const EdgeInsets.all(36),
+        decoration: BoxDecoration(
+          color: colors.cardBackground,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: colors.subtleBorder),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 16,
+              offset: Offset(0, 4),
+            ),
+          ],
         ),
-
-        // PDF Workspace Canvas
-        Expanded(
-          child: Container(
-            color: const Color(0xFF404040),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
-              child: Center(
-                child: InteractiveViewer(
-                  transformationController: _transformationController,
-                  minScale: 0.8,
-                  maxScale: 3.5,
-                  child: Container(
-                    width: 680,
-                    padding: const EdgeInsets.all(48),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(2),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Colors.black45,
-                          blurRadius: 18,
-                          offset: Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: isMayorsPermit
-                        ? _buildMayorsPermitPdf()
-                        : isSanitary
-                            ? _buildSanitaryPermitPdf()
-                            : isMarketClearance
-                                ? _buildMarketClearancePdf()
-                                : (_pdfCurrentPage == 1
-                                    ? _buildPdfPage1()
-                                    : _buildPdfPage2()),
-                  ),
-                ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF4444).withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.picture_as_pdf_rounded,
+                size: 56,
+                color: Color(0xFFEF4444),
               ),
             ),
-          ),
+            const SizedBox(height: 20),
+            Text(
+              doc.name,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: colors.primaryText,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '${doc.filename} • ${_getFileTypeLabel(doc)}',
+              style: TextStyle(
+                fontSize: 13,
+                color: colors.secondaryText,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: colors.subtleBorder.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.info_outline_rounded,
+                      size: 18, color: Color(0xFF0284C7)),
+                  SizedBox(width: 10),
+                  Flexible(
+                    child: Text(
+                      'PDF documents open in full resolution directly in your browser.',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: Color(0xFF0369A1),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 28),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () => _openOrDownloadDocument(doc, download: true),
+                  icon: const Icon(Icons.download_rounded, size: 18),
+                  label: const Text('Download PDF'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                FilledButton.icon(
+                  onPressed: () => _openOrDownloadDocument(doc),
+                  icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                  label: const Text('Open PDF in Browser Tab'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFEF4444),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 22, vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 

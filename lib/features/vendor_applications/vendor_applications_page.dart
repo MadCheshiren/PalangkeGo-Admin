@@ -443,27 +443,36 @@ class _ApplicationTable extends StatelessWidget {
           onSelectChanged: (_) => onOpen(item),
           cells: [
             DataCell(
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (isNew)
-                    Container(
-                      width: 3.5,
-                      height: 24,
-                      margin: const EdgeInsets.only(right: 8),
-                      decoration: BoxDecoration(
-                        color: colors.info,
-                        borderRadius: BorderRadius.circular(2),
+              Tooltip(
+                message: item.id,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isNew)
+                      Container(
+                        width: 3.5,
+                        height: 24,
+                        margin: const EdgeInsets.only(right: 8),
+                        decoration: BoxDecoration(
+                          color: colors.info,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    Flexible(
+                      child: Text(
+                        item.id.length > 12
+                            ? '${item.id.substring(0, 8)}…'
+                            : item.id,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: colors.accent,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
-                  Text(
-                    item.id,
-                    style: TextStyle(
-                      color: colors.accent,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             DataCell(

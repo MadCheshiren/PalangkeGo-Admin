@@ -10,3 +10,6 @@ Future<void> saveFileBytes({
   required String mimeType,
 }) =>
     saver.saveFileBytes(bytes: bytes, filename: filename, mimeType: mimeType);
+
+void openOrDownloadUrl(String url, {String? filename, bool download = false}) =>
+    saver.openOrDownloadUrl(url, filename: filename, download: download);

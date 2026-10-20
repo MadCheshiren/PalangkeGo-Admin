@@ -15,3 +15,15 @@ Future<void> saveFileBytes({
   anchor.remove();
   html.Url.revokeObjectUrl(url);
 }
+
+void openOrDownloadUrl(String url, {String? filename, bool download = false}) {
+  if (download) {
+    final anchor = html.AnchorElement(href: url)
+      ..setAttribute('download', filename ?? '')
+      ..target = '_blank'
+      ..click();
+    anchor.remove();
+  } else {
+    html.window.open(url, '_blank');
+  }
+}

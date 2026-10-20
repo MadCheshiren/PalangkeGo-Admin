@@ -511,11 +511,15 @@ class _Table extends StatelessWidget {
         onSelectChanged: (_) => open(v),
         cells: [
           DataCell(
-            Text(
-              v.id,
-              style: TextStyle(
-                color: colors.accent,
-                fontWeight: FontWeight.w800,
+            Tooltip(
+              message: v.id,
+              child: Text(
+                v.id.length > 12 ? '${v.id.substring(0, 8)}…' : v.id,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: colors.accent,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
           ),

@@ -60,6 +60,7 @@ String enumLabel(Object value) {
 class Vendor {
   const Vendor({
     required this.id,
+    this.userId,
     required this.name,
     required this.email,
     required this.stallType,
@@ -83,6 +84,7 @@ class Vendor {
   });
 
   final String id;
+  final String? userId;
   final String name;
   final String email;
   final String stallType;
@@ -124,6 +126,7 @@ class Vendor {
   }) =>
       Vendor(
         id: id,
+        userId: userId,
         name: name,
         email: email,
         stallType: stallType ?? this.stallType,
@@ -163,6 +166,7 @@ class Vendor {
 class Customer {
   const Customer({
     required this.id,
+    this.userId,
     required this.name,
     required this.email,
     required this.registeredAt,
@@ -176,6 +180,7 @@ class Customer {
   });
 
   final String id;
+  final String? userId;
   final String name;
   final String email;
   final DateTime registeredAt;
@@ -198,6 +203,7 @@ class Customer {
   }) =>
       Customer(
         id: id,
+        userId: userId,
         name: name,
         email: email,
         registeredAt: registeredAt,
@@ -217,6 +223,7 @@ class Customer {
 class VendorApplication {
   const VendorApplication({
     required this.id,
+    this.userId,
     required this.applicant,
     required this.stallName,
     required this.category,
@@ -230,6 +237,7 @@ class VendorApplication {
   });
 
   final String id;
+  final String? userId;
   final String applicant;
   final String stallName;
   final String category;
@@ -249,6 +257,7 @@ class VendorApplication {
   }) =>
       VendorApplication(
         id: id,
+        userId: userId,
         applicant: applicant,
         stallName: stallName,
         category: category,
@@ -265,6 +274,7 @@ class VendorApplication {
 class RenewalRequest {
   const RenewalRequest({
     required this.id,
+    this.userId,
     required this.applicant,
     required this.stallName,
     required this.category,
@@ -277,6 +287,7 @@ class RenewalRequest {
   });
 
   final String id;
+  final String? userId;
   final String applicant;
   final String stallName;
   final String category;
@@ -295,6 +306,7 @@ class RenewalRequest {
   }) =>
       RenewalRequest(
         id: id,
+        userId: userId,
         applicant: applicant,
         stallName: stallName,
         category: category,
@@ -310,6 +322,7 @@ class RenewalRequest {
 class Report {
   const Report({
     required this.id,
+    this.userId,
     required this.type,
     required this.accountIssue,
     this.category = 'FRESH FISH',
@@ -331,9 +344,11 @@ class Report {
     this.resolutionNote,
     this.resolvedAt,
     this.resolvedBy,
+    this.evidenceUrls = const [],
   });
 
   final String id;
+  final String? userId;
   final String type;
   final String accountIssue;
   final String? category;
@@ -355,8 +370,10 @@ class Report {
   final String? resolutionNote;
   final DateTime? resolvedAt;
   final String? resolvedBy;
+  final List<String> evidenceUrls;
 
   Report copyWith({
+    String? userId,
     ReportStatus? status,
     String? notes,
     String? decision,
@@ -364,9 +381,11 @@ class Report {
     String? resolutionNote,
     DateTime? resolvedAt,
     String? resolvedBy,
+    List<String>? evidenceUrls,
   }) =>
       Report(
         id: id,
+        userId: userId,
         type: type,
         accountIssue: accountIssue,
         category: category,
@@ -388,6 +407,7 @@ class Report {
         resolutionNote: resolutionNote ?? this.resolutionNote,
         resolvedAt: resolvedAt ?? this.resolvedAt,
         resolvedBy: resolvedBy ?? this.resolvedBy,
+        evidenceUrls: evidenceUrls ?? this.evidenceUrls,
       );
 }
 

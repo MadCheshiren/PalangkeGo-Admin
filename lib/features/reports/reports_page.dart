@@ -200,6 +200,21 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
           title: 'Reports Management',
           subtitle:
               'Review and manage customer reports, stall holder violations, and application support requests submitted from the PalengkeGo mobile application.',
+          trailing: OutlinedButton.icon(
+            icon: const Icon(Icons.sync_rounded, size: 18),
+            label: const Text('Sync with Mobile App'),
+            onPressed: () async {
+              await ref.read(appDataProvider.notifier).reload();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Reports synchronized with Supabase.'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              }
+            },
+          ),
           tabs: _ReportTabs(
             selected: targetType,
             onChanged: (value) {
@@ -739,6 +754,18 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
         }
       }
     }
+    final fallbackName = widget.report.vendorName.isNotEmpty
+        ? widget.report.vendorName
+        : widget.report.accountIssue;
+    if (fallbackName.isNotEmpty) {
+      final isCustomer = widget.report.type == 'Customer';
+      return _ReportedAccount(
+        id: widget.report.accountIssue,
+        name: fallbackName,
+        type: isCustomer ? 'Customer' : 'Stall Holder',
+        status: AccountStatus.active,
+      );
+    }
     return null;
   }
 
@@ -1047,27 +1074,55 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      const Text(
-                        'EVIDENCE ATTACHED (2 IMAGES)',
-                        style: TextStyle(
+                      Text(
+                        widget.report.evidenceUrls.isNotEmpty
+                            ? 'EVIDENCE ATTACHED (${widget.report.evidenceUrls.length} ${widget.report.evidenceUrls.length == 1 ? 'IMAGE' : 'IMAGES'})'
+                            : 'EVIDENCE ATTACHED',
+                        style: const TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
                       const SizedBox(height: 9),
-                      Row(
-                        children: [
-                          _evidence(
-                            'assets/images/spoiled_produce.png',
-                            'Spoiled produce',
+                      if (widget.report.evidenceUrls.isEmpty)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
                           ),
-                          const SizedBox(width: 10),
-                          _evidence(
-                            'assets/images/mobile_conversation.png',
-                            'Mobile conversation',
+                          decoration: BoxDecoration(
+                            color: semanticColors(context)
+                                .inputSurface
+                                .withValues(alpha: .5),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: semanticColors(context).subtleBorder,
+                            ),
                           ),
-                        ],
-                      ),
+                          child: Text(
+                            'No photo evidence was attached to this report.',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: semanticColors(context).mutedText,
+                            ),
+                          ),
+                        )
+                      else
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: widget.report.evidenceUrls
+                              .asMap()
+                              .entries
+                              .map(
+                                (entry) => _evidenceNetwork(
+                                  entry.value,
+                                  'Evidence #${entry.key + 1}',
+                                ),
+                              )
+                              .toList(),
+                        ),
                       const SizedBox(height: 16),
                       const Text(
                         'ACCOUNT HISTORY HIGHLIGHTS',
@@ -1479,84 +1534,74 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
         ],
       );
 
-  Widget _evidence(String asset, String label) => Expanded(
-        child: InkWell(
-          onTap: () => showDialog<void>(
-            context: context,
-            builder: (_) => _EvidenceViewerDialog(
-              initialAsset: asset,
-              evidence: const [
-                _EvidenceItem(
-                  asset: 'assets/images/spoiled_produce.png',
-                  label: 'Spoiled produce',
-                  filename: 'spoiled_produce.png',
-                ),
-                _EvidenceItem(
-                  asset: 'assets/images/mobile_conversation.png',
-                  label: 'Mobile conversation',
-                  filename: 'mobile_conversation.png',
-                ),
-              ],
-            ),
+  Widget _evidenceNetwork(String url, String label) => InkWell(
+        onTap: () => showDialog<void>(
+          context: context,
+          builder: (_) => _EvidenceViewerDialog(
+            initialAsset: url,
+            evidence: widget.report.evidenceUrls
+                .asMap()
+                .entries
+                .map(
+                  (entry) => _EvidenceItem(
+                    asset: entry.value,
+                    label: 'Evidence #${entry.key + 1}',
+                    filename: entry.value.split('/').last.split('?').first,
+                  ),
+                )
+                .toList(),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: AspectRatio(
-                  aspectRatio: 2.1,
-                  child: Image.asset(
-                    asset,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) =>
-                        _missingEvidence(context),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(
+                width: 140,
+                height: 88,
+                child: Image.network(
+                  url,
+                  fit: BoxFit.cover,
+                  loadingBuilder: (_, child, progress) => progress == null
+                      ? child
+                      : const Center(
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                  errorBuilder: (_, __, ___) => Container(
+                    color: Colors.black12,
+                    child: const Center(
+                      child: Icon(Icons.broken_image_rounded, size: 24),
+                    ),
                   ),
                 ),
               ),
-              const SizedBox(height: 5),
-              Text(
-                label,
-                style:
-                    const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 4),
+            Text(label, style: const TextStyle(fontSize: 10)),
+          ],
         ),
       );
 
-  Widget _missingEvidence(BuildContext context) {
-    final colors = semanticColors(context);
-    return Container(
-      color: colors.inputSurface,
-      alignment: Alignment.center,
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.image_not_supported_outlined, color: colors.mutedText),
-          const SizedBox(height: 7),
-          Text(
-            'Evidence unavailable',
-            style: TextStyle(
-              color: colors.secondaryText,
-              fontWeight: FontWeight.w700,
-              fontSize: 11,
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            'The attached image could not be loaded.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: colors.mutedText, fontSize: 10),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _history(BuildContext context) {
-    if (widget.report.previousViolations == 0) {
+    final allReports = ref.watch(appDataProvider).reports;
+    final pastReports = allReports
+        .where(
+          (r) =>
+              r.id != widget.report.id &&
+              (r.accountIssue.trim().toLowerCase() ==
+                      widget.report.accountIssue.trim().toLowerCase() ||
+                  (widget.report.vendorName.isNotEmpty &&
+                      r.vendorName.trim().toLowerCase() ==
+                          widget.report.vendorName.trim().toLowerCase())),
+        )
+        .toList();
+
+    if (pastReports.isEmpty) {
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
@@ -1577,10 +1622,6 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
       );
     }
 
-    final account = _reportedAccount(ref.watch(appDataProvider));
-    final isCustomer =
-        widget.report.type == 'Customer' || account?.type == 'Customer';
-
     final rows = <TableRow>[
       TableRow(
         decoration: BoxDecoration(
@@ -1593,24 +1634,14 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
           _cell('Status', isHeader: true),
         ],
       ),
-      TableRow(children: [
-        _cell('Sep 15, 2023'),
-        _cell(isCustomer ? 'Customer Conflict' : 'Delivery Problem'),
-        _cell('Warning Issued'),
-        _cell('Closed'),
-      ]),
-    ];
-
-    if (widget.report.previousViolations >= 2) {
-      rows.add(
+      for (final r in pastReports.take(3))
         TableRow(children: [
-          _cell('Aug 02, 2023'),
-          _cell(isCustomer ? 'Order Management' : 'Payment Problem'),
-          _cell('System Flag'),
-          _cell('Closed'),
+          _cell(shortDate.format(r.date)),
+          _cell(r.reason),
+          _cell(r.actionTaken ?? 'Warning Issued'),
+          _cell(enumLabel(r.status)),
         ]),
-      );
-    }
+    ];
 
     return Table(
       border: TableBorder.all(color: semanticColors(context).subtleBorder),
@@ -1937,15 +1968,25 @@ class _EvidenceViewerDialogState extends State<_EvidenceViewerDialog> {
                       onInteractionEnd: (_) {
                         if (_isDragging) setState(() => _isDragging = false);
                       },
-                      child: Image.asset(
-                        _item.asset,
-                        key: ValueKey('${_item.asset}-$_reloadToken'),
-                        width: double.infinity,
-                        height: double.infinity,
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) =>
-                            _errorState(colors),
-                      ),
+                      child: _item.asset.startsWith('http://') || _item.asset.startsWith('https://')
+                          ? Image.network(
+                              _item.asset,
+                              key: ValueKey('${_item.asset}-$_reloadToken'),
+                              width: double.infinity,
+                              height: double.infinity,
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  _errorState(colors),
+                            )
+                          : Image.asset(
+                              _item.asset,
+                              key: ValueKey('${_item.asset}-$_reloadToken'),
+                              width: double.infinity,
+                              height: double.infinity,
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  _errorState(colors),
+                            ),
                     ),
                   ),
                 ),
@@ -2063,7 +2104,9 @@ class _EvidenceViewerDialogState extends State<_EvidenceViewerDialog> {
                         ),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(5),
-                          child: Image.asset(item.asset, fit: BoxFit.cover),
+                          child: item.asset.startsWith('http://') || item.asset.startsWith('https://')
+                              ? Image.network(item.asset, fit: BoxFit.cover)
+                              : Image.asset(item.asset, fit: BoxFit.cover),
                         ),
                       ),
                       const SizedBox(height: 3),

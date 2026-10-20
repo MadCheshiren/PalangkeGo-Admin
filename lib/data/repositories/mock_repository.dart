@@ -1,3 +1,4 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -134,6 +135,7 @@ class AppDataController extends StateNotifier<AppDataState> {
               debugPrint('[admin] Firestore live update failed: $error'),
         );
       }
+      _listenToRealtimeReports();
       reload();
     } else {
       _restore();
@@ -147,8 +149,30 @@ class AppDataController extends StateNotifier<AppDataState> {
   StreamSubscription<void>? _liveDataSubscription;
   Timer? _liveReloadTimer;
 
+  RealtimeChannel? _reportsChannel;
+
+  void _listenToRealtimeReports() {
+    _reportsChannel?.unsubscribe();
+    _reportsChannel = supabaseAdminService?.subscribeToReports(
+      onReportInserted: (newReport) {
+        final exists = state.reports.any((r) => r.id == newReport.id);
+        if (!exists) {
+          state = state.copyWith(reports: [newReport, ...state.reports]);
+        }
+      },
+      onReportUpdated: (updatedReport) {
+        state = state.copyWith(
+          reports: state.reports
+              .map((r) => r.id == updatedReport.id ? updatedReport : r)
+              .toList(),
+        );
+      },
+    );
+  }
+
   @override
   void dispose() {
+    _reportsChannel?.unsubscribe();
     _liveReloadTimer?.cancel();
     _liveDataSubscription?.cancel();
     super.dispose();
@@ -174,7 +198,9 @@ class AppDataController extends StateNotifier<AppDataState> {
           announcements: data.announcements,
         );
       } catch (e) {
-        debugPrint('[admin] Firestore reload failed: $e');
+        if (!hasSupabase) {
+          debugPrint('[admin] Firestore reload failed: $e');
+        }
       }
     }
 
@@ -208,6 +234,34 @@ class AppDataController extends StateNotifier<AppDataState> {
         }
       } catch (e) {
         debugPrint('[admin] Supabase orders reload failed: $e');
+      }
+
+      try {
+        final sbReports = await supabaseAdminService!.fetchReports();
+        if (sbReports.isNotEmpty ||
+            (firebaseEnabled && state.reports.isEmpty)) {
+          state = state.copyWith(reports: sbReports);
+        }
+      } catch (e) {
+        debugPrint('[admin] Supabase reports reload failed: $e');
+      }
+
+      try {
+        final sbVendors = await supabaseAdminService!.fetchVendors();
+        if (sbVendors.isNotEmpty || firebaseEnabled) {
+          state = state.copyWith(vendors: sbVendors);
+        }
+      } catch (e) {
+        debugPrint('[admin] Supabase vendors reload failed: $e');
+      }
+
+      try {
+        final sbCustomers = await supabaseAdminService!.fetchCustomers();
+        if (sbCustomers.isNotEmpty || firebaseEnabled) {
+          state = state.copyWith(customers: sbCustomers);
+        }
+      } catch (e) {
+        debugPrint('[admin] Supabase customers reload failed: $e');
       }
     }
   }
@@ -256,7 +310,7 @@ class AppDataController extends StateNotifier<AppDataState> {
 
   Future<void> setVendorStatus(String id, AccountStatus status) async {
     if (status == AccountStatus.blocked || status == AccountStatus.active) {
-      supabaseAdminService?.setAccountBlocked(id, status == AccountStatus.blocked);
+      await supabaseAdminService?.setAccountBlocked(id, status == AccountStatus.blocked);
     }
     if (firebaseEnabled) {
       if (status == AccountStatus.blocked || status == AccountStatus.active) {
@@ -315,7 +369,7 @@ class AppDataController extends StateNotifier<AppDataState> {
     required String administrativeNotes,
   }) async {
     if (status == AccountStatus.blocked || status == AccountStatus.active) {
-      supabaseAdminService?.setAccountBlocked(id, status == AccountStatus.blocked);
+      await supabaseAdminService?.setAccountBlocked(id, status == AccountStatus.blocked);
     }
     if (firebaseEnabled) {
       if (status == AccountStatus.blocked || status == AccountStatus.active) {
@@ -499,7 +553,7 @@ class AppDataController extends StateNotifier<AppDataState> {
     required String administrativeNotes,
   }) async {
     if (status == AccountStatus.blocked || status == AccountStatus.active) {
-      supabaseAdminService?.setAccountBlocked(id, status == AccountStatus.blocked);
+      await supabaseAdminService?.setAccountBlocked(id, status == AccountStatus.blocked);
     }
     if (firebaseEnabled) {
       if (status == AccountStatus.blocked || status == AccountStatus.active) {
@@ -576,13 +630,17 @@ class AppDataController extends StateNotifier<AppDataState> {
     String id,
     ApplicationStatus status, {
     String? rejectionReason,
+    DateTime? expiryDate,
   }) async {
     final sb = supabaseAdminService;
+    final app = _firstOrNull(state.applications.where((item) => item.id == id));
     if (sb != null && sb.isConfigured) {
       await sb.updateApplicationStatus(
         id,
         status,
         rejectionReason: rejectionReason,
+        stallHolderId: app?.userId,
+        expiryDate: expiryDate,
       );
     }
 
@@ -692,6 +750,7 @@ class AppDataController extends StateNotifier<AppDataState> {
     String id,
     RenewalStatus status, {
     String? rejectionReason,
+    DateTime? expiryDate,
   }) async {
     if (firebaseEnabled) {
       final error = status == RenewalStatus.approved
@@ -766,11 +825,17 @@ class AppDataController extends StateNotifier<AppDataState> {
   ) async {
     await _wait();
     final current = _firstOrNull(state.reports.where((item) => item.id == id));
+    final isWarning = status == ReportStatus.underReview;
     state = state.copyWith(
       reports: state.reports
           .map(
             (item) => item.id == id
-                ? item.copyWith(status: status, notes: notes)
+                ? item.copyWith(
+                    status: status,
+                    notes: notes,
+                    actionTaken: isWarning ? 'Warning Issued' : item.actionTaken,
+                    decision: isWarning ? 'Warning Issued' : item.decision,
+                  )
                 : item,
           )
           .toList(),
@@ -927,6 +992,7 @@ class AppDataController extends StateNotifier<AppDataState> {
           .map((item) => item.id == report.id ? updated : item)
           .toList(),
     );
+    await supabaseAdminService?.setAccountSuspended(account.id, endDate);
     await _persistSuspensions();
     await _persistReport(updated);
     await recordAudit(
@@ -1024,6 +1090,7 @@ class AppDataController extends StateNotifier<AppDataState> {
     await _persistBlockedDetails();
     await _persistSuspensions();
     await _persistReport(updated);
+    supabaseAdminService?.setAccountBlocked(account.id, true);
     await recordAudit(
       action: AuditAction.blockAccount,
       targetEntityType: account.type,
@@ -1041,23 +1108,44 @@ class AppDataController extends StateNotifier<AppDataState> {
   }
 
   _ReportedAccountRef? _findReportedAccount(Report report) {
+    final issue = report.accountIssue.trim().toLowerCase();
+    final vendorName = report.vendorName.trim().toLowerCase();
+
     if (report.type == 'Vendor' || report.type == 'Stall Holder') {
       final vendor = _firstOrNull(state.vendors.where(
         (item) =>
-            item.name == report.accountIssue || item.name == report.vendorName,
+            item.name.trim().toLowerCase() == issue ||
+            item.name.trim().toLowerCase() == vendorName ||
+            item.id.toLowerCase() == issue,
       ));
-      if (vendor == null) return null;
-      return _ReportedAccountRef(
-        id: vendor.id,
-        name: vendor.name,
-        type: 'Stall Holder',
-        status: vendor.status,
-        isVendor: true,
-      );
+      if (vendor != null) {
+        return _ReportedAccountRef(
+          id: vendor.id,
+          name: vendor.name,
+          type: 'Stall Holder',
+          status: vendor.status,
+          isVendor: true,
+        );
+      }
+      final fallbackName = report.vendorName.isNotEmpty
+          ? report.vendorName
+          : report.accountIssue;
+      if (fallbackName.isNotEmpty) {
+        return _ReportedAccountRef(
+          id: report.accountIssue,
+          name: fallbackName,
+          type: 'Stall Holder',
+          status: AccountStatus.active,
+          isVendor: true,
+        );
+      }
+      return null;
     }
     if (report.type == 'Customer') {
       final customer = _firstOrNull(state.customers.where(
-        (item) => item.name == report.accountIssue,
+        (item) =>
+            item.name.trim().toLowerCase() == issue ||
+            item.id.toLowerCase() == issue,
       ));
       if (customer != null) {
         return _ReportedAccountRef(
@@ -1070,7 +1158,9 @@ class AppDataController extends StateNotifier<AppDataState> {
       }
 
       final vendor = _firstOrNull(state.vendors.where(
-        (item) => item.name == report.vendorName,
+        (item) =>
+            item.name.trim().toLowerCase() == vendorName ||
+            item.id.toLowerCase() == vendorName,
       ));
       if (vendor != null) {
         return _ReportedAccountRef(
@@ -1079,6 +1169,19 @@ class AppDataController extends StateNotifier<AppDataState> {
           type: 'Stall Holder',
           status: vendor.status,
           isVendor: true,
+        );
+      }
+
+      final fallbackName = report.accountIssue.isNotEmpty
+          ? report.accountIssue
+          : report.vendorName;
+      if (fallbackName.isNotEmpty) {
+        return _ReportedAccountRef(
+          id: report.accountIssue,
+          name: fallbackName,
+          type: 'Customer',
+          status: AccountStatus.active,
+          isVendor: false,
         );
       }
     }
@@ -1289,6 +1392,7 @@ class AppDataController extends StateNotifier<AppDataState> {
               : item)
           .toList(),
     );
+    await supabaseAdminService?.setAccountSuspended(accountId, endDate);
     await _persistSuspensions();
     await recordAudit(
       action: AuditAction.suspendAccount,
@@ -1327,6 +1431,7 @@ class AppDataController extends StateNotifier<AppDataState> {
               : item)
           .toList(),
     );
+    await supabaseAdminService?.setAccountSuspended(current.accountId, null);
     await _persistSuspensions();
     await recordAudit(
       action: AuditAction.liftSuspension,
@@ -1460,8 +1565,10 @@ class AppDataController extends StateNotifier<AppDataState> {
   Future<void> _persistRenewal(RenewalRequest renewal) =>
       _dataSource.persistRenewal(renewal);
 
-  Future<void> _persistReport(Report report) =>
-      _dataSource.persistReport(report);
+  Future<void> _persistReport(Report report) async {
+    await _dataSource.persistReport(report);
+    await supabaseAdminService?.updateReport(report);
+  }
 
   Future<void> _persistSuspensions() =>
       _dataSource.persistSuspensions(state.suspensions);

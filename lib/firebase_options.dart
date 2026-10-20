@@ -1,6 +1,6 @@
 import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart'
-    show defaultTargetPlatform, TargetPlatform;
+    show defaultTargetPlatform, TargetPlatform, kIsWeb;
 
 /// PLACEHOLDER — replace by running `flutterfire configure` in this project.
 /// In demo mode (`flutter run` without FIREBASE_ENABLED) this file is never
@@ -8,6 +8,9 @@ import 'package:flutter/foundation.dart'
 /// closed with a clear message instead of silently misbehaving.
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
+    if (kIsWeb) {
+      return web;
+    }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
         return android;

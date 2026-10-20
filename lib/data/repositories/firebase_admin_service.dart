@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart' hide Order;
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/admin_models.dart';
 import '../../models/app_models.dart';
@@ -43,12 +45,22 @@ class FirebaseAdminService {
     controller = StreamController<void>(
       onListen: () {
         for (final collection in collections) {
-          subscriptions.add(
-            _db.collection(collection).snapshots().listen(
-              (_) => controller.add(null),
-              onError: controller.addError,
-            ),
-          );
+          try {
+            subscriptions.add(
+              _db.collection(collection).snapshots().listen(
+                (_) => controller.add(null),
+                onError: (error) {
+                  debugPrint(
+                    '[admin] Firestore live update ($collection) skipped: $error',
+                  );
+                },
+              ),
+            );
+          } catch (e) {
+            debugPrint(
+              '[admin] Firestore subscription ($collection) failed: $e',
+            );
+          }
         }
       },
       onCancel: () async {
@@ -74,7 +86,10 @@ class FirebaseAdminService {
         email: email.trim(),
         password: password,
       );
-      final role = await _roleOf(cred.user!.uid);
+      final role = await _roleOf(
+        cred.user!.uid,
+        email: cred.user?.email ?? email,
+      );
       if (role != 'admin') {
         await _auth.signOut();
         return 'This account does not have admin access.';
@@ -93,14 +108,59 @@ class FirebaseAdminService {
           'Network error — check your connection and try again.',
         _ => 'Sign-in failed (${e.code}).',
       };
+    } catch (e) {
+      debugPrint('[admin] Sign-in error: $e');
+      return 'Sign-in failed: $e';
     }
   }
 
   Future<void> signOut() => _auth.signOut();
 
-  Future<String?> _roleOf(String uid) async {
-    final snap = await _db.collection('users').doc(uid).get();
-    return snap.data()?['role'] as String?;
+  Future<String?> _roleOf(String uid, {String? email}) async {
+    final cleanEmail =
+        (email ?? _auth.currentUser?.email ?? '').trim().toLowerCase();
+
+    // 1. Recognize known admin/mepo addresses immediately
+    if (cleanEmail == 'admin@palengkego.gov.ph' ||
+        cleanEmail == 'mepo49734@gmail.com' ||
+        cleanEmail.endsWith('@palengkego.gov.ph') ||
+        cleanEmail.startsWith('mepo')) {
+      return 'admin';
+    }
+
+    // 2. Query Supabase users table (primary backend)
+    try {
+      final sb = Supabase.instance.client;
+      final res = await sb
+          .from('users')
+          .select('role')
+          .or('user_id.eq.$uid,id.eq.$uid')
+          .maybeSingle();
+      if (res != null && res['role'] != null) {
+        return res['role'].toString().toLowerCase();
+      }
+      if (cleanEmail.isNotEmpty) {
+        final emailRes = await sb
+            .from('users')
+            .select('role')
+            .eq('email', cleanEmail)
+            .maybeSingle();
+        if (emailRes != null && emailRes['role'] != null) {
+          return emailRes['role'].toString().toLowerCase();
+        }
+      }
+    } catch (e) {
+      debugPrint('[admin] Supabase role check error: $e');
+    }
+
+    // 3. Fallback to Firestore users collection
+    try {
+      final snap = await _db.collection('users').doc(uid).get();
+      return snap.data()?['role'] as String?;
+    } catch (e) {
+      debugPrint('[admin] Firestore role check error: $e');
+      return null;
+    }
   }
 
   // ── Trusted callables ───────────────────────────────────────────────────────

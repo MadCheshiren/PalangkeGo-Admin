@@ -38,34 +38,30 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
   bool processing = false;
 
   Future<void> approve() async {
-    final okay = await showDialog<bool>(
+    final selectedExpiry = await showDialog<DateTime>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Approve application?'),
-        content: const Text('This will grant marketplace access.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Approve'),
-          ),
-        ],
+      builder: (context) => _ApprovePermitDialogWidget(
+        applicantName: widget.applicant,
+        stallName: widget.stall,
+        location: widget.location,
+        isRenewal: widget.renewal != null,
       ),
     );
-    if (okay != true || !mounted) return;
+    if (selectedExpiry == null || !mounted) return;
     setState(() => processing = true);
     if (widget.application != null) {
-      await ref
-          .read(appDataProvider.notifier)
-          .updateApplication(widget.id, ApplicationStatus.verified);
+      await ref.read(appDataProvider.notifier).updateApplication(
+            widget.id,
+            ApplicationStatus.verified,
+            expiryDate: selectedExpiry,
+          );
     }
     if (widget.renewal != null) {
-      await ref
-          .read(appDataProvider.notifier)
-          .updateRenewal(widget.id, RenewalStatus.approved);
+      await ref.read(appDataProvider.notifier).updateRenewal(
+            widget.id,
+            RenewalStatus.approved,
+            expiryDate: selectedExpiry,
+          );
     }
     if (mounted) {
       final messenger = ScaffoldMessenger.of(context);
@@ -73,11 +69,12 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
       Navigator.pop(context);
 
       messenger.clearSnackBars();
+      final expiryLabel = DateFormat.yMMMMd().format(selectedExpiry);
       if (widget.application != null) {
         final controller = messenger.showSnackBar(
           SnackBar(
             content: Text(
-              'Application approved! Stall allocation (${widget.location}) locked.',
+              'Application approved! Permit valid until $expiryLabel.',
             ),
             duration: const Duration(seconds: 4),
           ),
@@ -89,9 +86,11 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
         });
       } else {
         final controller = messenger.showSnackBar(
-          const SnackBar(
-            content: Text('Stall renewal approved.'),
-            duration: Duration(seconds: 4),
+          SnackBar(
+            content: Text(
+              'Stall renewal approved! Permit valid until $expiryLabel.',
+            ),
+            duration: const Duration(seconds: 4),
           ),
         );
         Future.delayed(const Duration(seconds: 4), () {
@@ -740,7 +739,9 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
         DateTime.now();
     final documents = (rawDocs != null && rawDocs.isNotEmpty)
         ? rawDocs
-        : seedKycDocuments(effectiveSubmittedAt);
+        : (widget.application != null
+            ? const <KycDocument>[]
+            : seedKycDocuments(effectiveSubmittedAt));
 
     final tiles = <Widget>[];
     for (int i = 0; i < documents.length; i++) {
@@ -800,7 +801,37 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
           ],
         ),
         const SizedBox(height: 14),
-        GridView.count(
+        if (documents.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: semanticColors(context).inputSurface.withValues(alpha: .5),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: semanticColors(context).subtleBorder),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  size: 20,
+                  color: semanticColors(context).mutedText,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'No documents have been uploaded for this application.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: semanticColors(context).mutedText,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          GridView.count(
           crossAxisCount: MediaQuery.sizeOf(context).width < 500
               ? 1
               : MediaQuery.sizeOf(context).width < 700
@@ -2147,6 +2178,198 @@ class _PromptInputDialogWidgetState extends State<_PromptInputDialogWidget> {
                 }
               : null,
           child: Text(widget.confirmLabel),
+        ),
+      ],
+    );
+  }
+}
+
+
+class _ApprovePermitDialogWidget extends StatefulWidget {
+  final String applicantName;
+  final String stallName;
+  final String location;
+  final bool isRenewal;
+
+  const _ApprovePermitDialogWidget({
+    required this.applicantName,
+    required this.stallName,
+    required this.location,
+    this.isRenewal = false,
+  });
+
+  @override
+  State<_ApprovePermitDialogWidget> createState() =>
+      _ApprovePermitDialogWidgetState();
+}
+
+class _ApprovePermitDialogWidgetState
+    extends State<_ApprovePermitDialogWidget> {
+  late DateTime _selectedExpiry;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    // Default to January 31 of next year per MEPO January payment window convention
+    _selectedExpiry = DateTime(now.year + 1, 1, 31);
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedExpiry,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 10)),
+      helpText: 'SELECT PERMIT EXPIRATION DATE',
+      confirmText: 'SET DATE',
+    );
+    if (picked != null) {
+      setState(() => _selectedExpiry = picked);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF10B981).withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.verified_user_rounded,
+              color: Color(0xFF059669),
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              widget.isRenewal
+                  ? 'Approve Renewal & Set Expiration'
+                  : 'Approve Application & Set Expiration',
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: 440,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Granting market access for ${widget.applicantName} (${widget.stallName}) at ${widget.location}.',
+              style: const TextStyle(fontSize: 13.5, color: Color(0xFF475569)),
+            ),
+            const SizedBox(height: 18),
+            const Text(
+              'PERMIT EXPIRATION DATE',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.8,
+                color: Color(0xFF64748B),
+              ),
+            ),
+            const SizedBox(height: 8),
+            InkWell(
+              onTap: _pickDate,
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFCBD5E1)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.calendar_month_rounded,
+                      color: Color(0xFF059669),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            DateFormat('MMMM d, yyyy').format(_selectedExpiry),
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          const Text(
+                            'Tap to change expiration date',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF94A3B8),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    OutlinedButton(
+                      onPressed: _pickDate,
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const Text('Change', style: TextStyle(fontSize: 12)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline_rounded,
+                      size: 15, color: Color(0xFF475569)),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'MEPO fees are typically paid in January. Set the expiration to reflect the vendor\'s payment coverage.',
+                      style: TextStyle(fontSize: 11, color: Color(0xFF475569)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, null),
+          child: const Text('Cancel'),
+        ),
+        FilledButton.icon(
+          onPressed: () => Navigator.pop(context, _selectedExpiry),
+          icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
+          label: const Text('Approve & Set Expiration'),
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF059669),
+          ),
         ),
       ],
     );

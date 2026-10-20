@@ -19,3 +19,13 @@ Future<void> saveFileBytes({
     await file.writeAsBytes(bytes);
   }
 }
+
+void openOrDownloadUrl(String url, {String? filename, bool download = false}) {
+  if (Platform.isWindows) {
+    Process.run('cmd', ['/c', 'start', '', url]);
+  } else if (Platform.isMacOS) {
+    Process.run('open', [url]);
+  } else if (Platform.isLinux) {
+    Process.run('xdg-open', [url]);
+  }
+}
